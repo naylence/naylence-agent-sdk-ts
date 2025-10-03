@@ -1,4 +1,4 @@
-import type { JSONRPCResponse } from "naylence-core";
+import { JSONRPCRequestSchema, type JSONRPCResponse } from "naylence-core";
 import { handleAgentRpcRequest } from "../naylence/agent/rpc-adapter.js";
 import {
   makeTask,
@@ -144,6 +144,29 @@ describe("handleAgentRpcRequest - A2A methods", () => {
     ]);
   });
 
+  it("yields invalid request error when A2A schema validation fails", async () => {
+    const { agent, mocks } = createMockAgent();
+
+    const invalidRequest = {
+      jsonrpc: JSONRPC_VERSION,
+      id: "bad-params",
+      method: "tasks/send",
+      params: { unexpected: true },
+    } satisfies Record<string, unknown>;
+
+    const responses = await collectResponses(
+      handleAgentRpcRequest(agent, invalidRequest),
+    );
+
+    expect(mocks.startTask).not.toHaveBeenCalled();
+    expect(responses[0]).toEqual(
+      expect.objectContaining({
+        id: "bad-params",
+        error: expect.objectContaining({ code: -32600 }),
+      }),
+    );
+  });
+
   it("routes tasks/send and serializes task results", async () => {
     const { agent, mocks } = createMockAgent();
     const task = makeTask({ id: "task-1", payload: "done" });
@@ -221,6 +244,23 @@ describe("handleAgentRpcRequest - A2A methods", () => {
         id: "cancel-1",
         result: expect.objectContaining({ id: "task-cancel" }),
       }),
+    );
+  });
+
+  it("defaults to null id and result when cancel returns nothing", async () => {
+    const { agent, mocks } = createMockAgent();
+    mocks.cancelTask.mockResolvedValue(null);
+
+    const params = { id: "task-null" } satisfies TaskIdParams;
+    const request = createRequest("tasks/cancel", params, null);
+
+    const responses = await collectResponses(
+      handleAgentRpcRequest(agent, request),
+    );
+
+    expect(mocks.cancelTask).toHaveBeenCalledWith(params);
+    expect(responses[0]).toEqual(
+      expect.objectContaining({ id: null, result: null }),
     );
   });
 
@@ -317,6 +357,21 @@ describe("handleAgentRpcRequest - A2A methods", () => {
     );
   });
 
+  it("returns method not found for tasks/resubscribe", async () => {
+    const { agent } = createMockAgent();
+
+    const request = createRequest("tasks/resubscribe", { id: "task-1" });
+    const responses = await collectResponses(
+      handleAgentRpcRequest(agent, request),
+    );
+
+    expect(responses[0]).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({ code: -32601 }),
+      }),
+    );
+  });
+
   it("returns registered push notification configuration result", async () => {
     const { agent, mocks } = createMockAgent();
     const config: TaskPushNotificationConfig = {
@@ -341,6 +396,31 @@ describe("handleAgentRpcRequest - A2A methods", () => {
         id: "push-set",
         result: config,
       }),
+    );
+  });
+
+  it("coerces undefined push registration result to null", async () => {
+    const { agent, mocks } = createMockAgent();
+    const config: TaskPushNotificationConfig = {
+      id: "task-push",
+      pushNotificationConfig: {
+        url: "https://callback",
+        token: null,
+        authentication: null,
+      },
+    };
+    mocks.registerPushEndpoint.mockResolvedValue(undefined);
+
+    const responses = await collectResponses(
+      handleAgentRpcRequest(
+        agent,
+        createRequest("tasks/pushNotification/set", config, null),
+      ),
+    );
+
+    expect(mocks.registerPushEndpoint).toHaveBeenCalledWith(config);
+    expect(responses[0]).toEqual(
+      expect.objectContaining({ id: null, result: null }),
     );
   });
 
@@ -408,6 +488,33 @@ describe("handleAgentRpcRequest - A2A methods", () => {
 
       expect(responses[0]).toEqual(
         expect.objectContaining({ id: "card", result: card }),
+      );
+    } finally {
+      parseSpy.mockRestore();
+    }
+  });
+});
+
+describe("handleAgentRpcRequest - generic parsing", () => {
+  it("includes string errors when request parsing fails", async () => {
+    const parseSpy = jest
+      .spyOn(JSONRPCRequestSchema, "parse")
+      .mockImplementation(() => {
+        throw "bad";
+      });
+
+    const { agent } = createMockAgent();
+
+    try {
+      const responses = await collectResponses(
+        handleAgentRpcRequest(agent, { something: true } as any),
+      );
+
+      expect(responses[0]).toEqual(
+        expect.objectContaining({
+          id: null,
+          error: expect.objectContaining({ code: -32600 }),
+        }),
       );
     } finally {
       parseSpy.mockRestore();
@@ -504,6 +611,12 @@ describe("handleAgentRpcRequest - error mapping", () => {
       method: "tasks/send",
       error: "boom",
       expected: { code: -32603 },
+      },
+      {
+        name: "generic error object",
+        method: "tasks/send",
+        error: new Error("generic failure"),
+        expected: { code: -32603 },
     },
   ])("maps $name errors to RPC responses", async ({
     method,
@@ -530,7 +643,7 @@ describe("handleAgentRpcRequest - error mapping", () => {
       }
     }
 
-  const request = createRequest(method, paramsFor(method), "err");
+    const request = createRequest(method, paramsFor(method), "err");
 
     const responses = await collectResponses(
       handleAgentRpcRequest(agent, request),
@@ -551,6 +664,27 @@ describe("handleAgentRpcRequest - custom registry", () => {
     const request = createRequest("custom/echo", { value: 1 });
     const responses = await collectResponses(
       handleAgentRpcRequest(agent, request),
+    );
+
+    expect(responses[0]).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({ code: -32601 }),
+      }),
+    );
+  });
+
+  it("handles agents without registry metadata", async () => {
+    const { agent } = createMockAgent();
+    const ctor = agent.constructor as {
+      rpcRegistry?: Map<string, RpcRegistryEntry>;
+    };
+    delete ctor.rpcRegistry;
+
+    const responses = await collectResponses(
+      handleAgentRpcRequest(
+        agent,
+        createRequest("custom/missing", { value: true }),
+      ),
     );
 
     expect(responses[0]).toEqual(
@@ -642,7 +776,7 @@ describe("handleAgentRpcRequest - custom registry", () => {
     registry.set("custom/sum", { propertyKey: "sum", streaming: false });
 
     const sum = jest.fn(({ a, b }: { a: number; b: number }) => a + b);
-  setAgentProperty(agent, "sum", sum);
+    setAgentProperty(agent, "sum", sum);
 
     const request = createRequest("custom/sum", { a: 2, b: 3 });
     const responses = await collectResponses(
@@ -669,6 +803,56 @@ describe("handleAgentRpcRequest - custom registry", () => {
     );
 
     expect(fail).toHaveBeenCalledWith();
+    expect(responses[0]).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({ code: -32603 }),
+      }),
+    );
+  });
+
+  it("propagates null id and result when handler resolves undefined", async () => {
+    const { agent, registry } = createMockAgent();
+    registry.set("custom/optional", {
+      propertyKey: "maybe",
+      streaming: false,
+    });
+
+    const maybe = jest.fn(async () => undefined);
+    setAgentProperty(agent, "maybe", maybe);
+
+    const request = {
+      jsonrpc: JSONRPC_VERSION,
+      id: null,
+      method: "custom/optional",
+      params: { args: [1, 2] },
+    } satisfies Record<string, unknown>;
+
+    const responses = await collectResponses(
+      handleAgentRpcRequest(agent, request),
+    );
+
+    expect(maybe).toHaveBeenCalledWith(1, 2);
+    expect(responses[0]).toEqual(
+      expect.objectContaining({ id: null, result: null }),
+    );
+  });
+
+  it("maps non-error throws from custom handlers", async () => {
+    const { agent, registry } = createMockAgent();
+    registry.set("custom/no-error", {
+      propertyKey: "noError",
+      streaming: false,
+    });
+
+    const noError = jest.fn(() => {
+      throw "boom";
+    });
+    setAgentProperty(agent, "noError", noError);
+
+    const responses = await collectResponses(
+      handleAgentRpcRequest(agent, createRequest("custom/no-error", {})),
+    );
+
     expect(responses[0]).toEqual(
       expect.objectContaining({
         error: expect.objectContaining({ code: -32603 }),

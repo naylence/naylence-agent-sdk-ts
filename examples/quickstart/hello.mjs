@@ -1,7 +1,7 @@
-import { withFabric, basicConfig, LogLevel } from "naylence-runtime";
+import { withFabric, enableLogging, LogLevel } from "naylence-runtime";
 import { Agent, BaseAgent } from "naylence-agent-sdk";
 
-basicConfig({ level: LogLevel.WARNING });
+enableLogging(LogLevel.WARNING);
 
 class EchoAgent extends BaseAgent {
     async runTask(payload) {
