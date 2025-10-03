@@ -1,0 +1,66 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "Node16",
+    "lib": ["ES2020", "DOM"],
+    "moduleResolution": "node16",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "allowJs": true,
+    "checkJs": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "removeComments": false,
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "exactOptionalPropertyTypes": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "naylence-core": [
+        "../naylence-core-ts/dist/types/index",
+        "../naylence-core-ts/src/index"
+      ],
+      "naylence-core/*": [
+        "../naylence-core-ts/dist/types/naylence/*",
+        "../naylence-core-ts/src/naylence/*"
+      ],
+      "naylence-runtime": [
+        "../naylence-runtime-ts/dist/types/index",
+        "../naylence-runtime-ts/src/index"
+      ],
+      "naylence-runtime/*": [
+        "../naylence-runtime-ts/dist/types/naylence/*",
+        "../naylence-runtime-ts/src/naylence/*"
+      ],
+      "naylence-factory": [
+        "../naylence-factory-ts/dist/types/index",
+        "../naylence-factory-ts/src/index"
+      ],
+      "naylence-factory/*": [
+        "../naylence-factory-ts/dist/types/naylence/*",
+        "../naylence-factory-ts/src/naylence/*"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
+}
