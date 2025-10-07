@@ -1,11 +1,12 @@
-import { jest } from "@jest/globals";
+import { jest } from '@jest/globals';
 import {
   createFameEnvelope,
   type FameEnvelope,
   type FameMessageResponse,
-} from "naylence-core";
-import * as runtime from "naylence-runtime";
-import { BaseAgent, BaseAgentState } from "../naylence/agent/base-agent.js";
+  type JSONRPCResponse,
+} from 'naylence-core';
+import * as runtime from 'naylence-runtime';
+import { BaseAgent, BaseAgentState } from '../naylence/agent/base-agent.js';
 import {
   TaskState,
   TaskSendParams,
@@ -13,16 +14,16 @@ import {
   type TaskPushNotificationConfig,
   type TaskStatusUpdateEvent,
   type Task,
-} from "../naylence/agent/a2a-types.js";
-import { makeTask, makeTaskParams } from "../naylence/agent/util.js";
-import * as rpcAdapter from "../naylence/agent/rpc-adapter.js";
-import { Agent } from "../naylence/agent/agent.js";
+} from '../naylence/agent/a2a-types.js';
+import { makeTask, makeTaskParams } from '../naylence/agent/util.js';
+import * as rpcAdapter from '../naylence/agent/rpc-adapter.js';
+import { Agent } from '../naylence/agent/agent.js';
 import {
   PushNotificationNotSupportedException,
   TaskNotCancelableException,
   UnsupportedOperationException,
-} from "../naylence/agent/errors.js";
-import type { StorageProvider } from "naylence-runtime";
+} from '../naylence/agent/errors.js';
+import type { StorageProvider } from 'naylence-runtime';
 
 const { FameAddress, FameFabric, InMemoryStorageProvider } = runtime;
 
@@ -30,10 +31,7 @@ class RecordingStorageProvider implements StorageProvider {
   readonly namespaces: string[] = [];
   private readonly store = new Map<string, unknown>();
 
-  async getKeyValueStore<V>(
-    _model: new () => V,
-    namespace: string,
-  ) {
+  async getKeyValueStore<V>(_model: new () => V, namespace: string) {
     this.namespaces.push(namespace);
     const backing = this.store as Map<string, V>;
     return {
@@ -66,7 +64,7 @@ class QueueAgent extends BaseAgent<BaseAgentState> {
   private readonly queue: Array<Task | null>;
 
   constructor(tasks: Array<Task | null>) {
-    super("queue-agent", {
+    super('queue-agent', {
       stateFactory: () => new BaseAgentState(),
       storageProvider: new InMemoryStorageProvider(),
     });
@@ -83,16 +81,13 @@ class RunTaskAgent extends BaseAgent<BaseAgentState> {
   readonly runs: Array<{ payload: unknown; id: string | null }> = [];
 
   constructor() {
-    super("run-task-agent", {
+    super('run-task-agent', {
       stateFactory: () => new BaseAgentState(),
       storageProvider: new InMemoryStorageProvider(),
     });
   }
 
-  override async runTask(
-    payload: unknown,
-    id: string | null,
-  ): Promise<unknown> {
+  override async runTask(payload: unknown, id: string | null): Promise<unknown> {
     this.runs.push({ payload, id });
     return { echoed: payload };
   }
@@ -102,15 +97,13 @@ class MessageRecorderAgent extends BaseAgent<BaseAgentState> {
   readonly messages: unknown[] = [];
 
   constructor() {
-    super("recorder-agent", {
+    super('recorder-agent', {
       stateFactory: () => new BaseAgentState(),
       storageProvider: new InMemoryStorageProvider(),
     });
   }
 
-  override async onMessage(
-    message: unknown,
-  ): Promise<FameMessageResponse | null> {
+  override async onMessage(message: unknown): Promise<FameMessageResponse | null> {
     this.messages.push(message);
     return null;
   }
@@ -118,22 +111,22 @@ class MessageRecorderAgent extends BaseAgent<BaseAgentState> {
 
 const createDataEnvelope = (payload: unknown): any => ({
   frame: {
-    type: "Data",
+    type: 'Data',
     payload,
   },
   corrId: null,
   replyTo: null,
 });
 
-describe("BaseAgent", () => {
+describe('BaseAgent', () => {
   afterEach(() => {
     jest.restoreAllMocks();
     jest.useRealTimers();
   });
 
-  it("uses provided storage provider and persists state updates", async () => {
+  it('uses provided storage provider and persists state updates', async () => {
     const storageProvider = new InMemoryStorageProvider();
-    const agent = new BaseAgent<CounterState>("custom-agent", {
+    const agent = new BaseAgent<CounterState>('custom-agent', {
       stateModel: CounterState,
       storageProvider,
     });
@@ -148,7 +141,7 @@ describe("BaseAgent", () => {
 
     const loaded = await agent.getState();
     expect(loaded.count).toBe(1);
-    expect(loaded.lastAgentName).toBe("custom-agent");
+    expect(loaded.lastAgentName).toBe('custom-agent');
 
     await agent.clearState();
     const reset = await agent.getState();
@@ -156,49 +149,47 @@ describe("BaseAgent", () => {
     expect(reset.lastAgentName).toBeNull();
   });
 
-  it("throws if storage provider is not supplied", () => {
-    const agent = new BaseAgent<CounterState>("missing-provider", {
+  it('throws if storage provider is not supplied', () => {
+    const agent = new BaseAgent<CounterState>('missing-provider', {
       stateModel: CounterState,
     });
 
-    expect(() => agent.storageProvider).toThrow(
-      "Storage provider is not available",
-    );
+    expect(() => agent.storageProvider).toThrow('Storage provider is not available');
   });
 
-  it("streams task updates for distinct status changes", async () => {
+  it('streams task updates for distinct status changes', async () => {
     jest.useFakeTimers();
 
     const tasks: Array<Task | null> = [
       makeTask({
-        id: "task-1",
+        id: 'task-1',
         payload: { step: 1 },
         state: TaskState.WORKING,
-        sessionId: "session",
+        sessionId: 'session',
       }),
       makeTask({
-        id: "task-1",
+        id: 'task-1',
         payload: { step: 2 },
         state: TaskState.WORKING,
-        sessionId: "session",
+        sessionId: 'session',
       }),
       makeTask({
-        id: "task-1",
+        id: 'task-1',
         payload: { step: 3 },
         state: TaskState.COMPLETED,
-        sessionId: "session",
+        sessionId: 'session',
       }),
       null,
     ];
 
     const agent = new QueueAgent(tasks);
     const params: TaskSendParams = makeTaskParams({
-      id: "task-1",
-      payload: "hello",
+      id: 'task-1',
+      payload: 'hello',
     });
 
     const events: Array<TaskStatusUpdateEvent | TaskArtifactUpdateEvent> = [];
-  const iterator = agent.subscribeToTaskUpdates(params);
+    const iterator = agent.subscribeToTaskUpdates(params);
 
     const collect = (async () => {
       for await (const event of iterator) {
@@ -219,196 +210,194 @@ describe("BaseAgent", () => {
     expect(secondUpdate.final).toBe(true);
   });
 
-  it("uses runTask fallback when startTask is not overridden", async () => {
+  it('uses runTask fallback when startTask is not overridden', async () => {
     const agent = new RunTaskAgent();
-    const params = makeTaskParams({ id: "run-1", payload: "payload" });
+    const params = makeTaskParams({ id: 'run-1', payload: 'payload' });
 
     const task = await agent.startTask(params);
 
-    expect(agent.runs).toEqual([{ payload: "payload", id: "run-1" }]);
+    expect(agent.runs).toEqual([{ payload: 'payload', id: 'run-1' }]);
     expect(task.status.state).toBe(TaskState.COMPLETED);
     const historyPart = task.history?.[0].parts[0];
     expect(historyPart).toMatchObject({
-      type: "data",
-      data: expect.objectContaining({ echoed: "payload" }),
+      type: 'data',
+      data: expect.objectContaining({ echoed: 'payload' }),
     });
   });
 
-  it("cancels active subscription when delivery ack fails", async () => {
-    const agent = new BaseAgent("ack-agent", {
+  it('cancels active subscription when delivery ack fails', async () => {
+    const agent = new BaseAgent('ack-agent', {
       stateFactory: () => new CounterState(),
       storageProvider: new InMemoryStorageProvider(),
     });
     const cancel = jest.fn();
-    (agent as any)._subscriptions.set("sub-1", {
+    (agent as any)._subscriptions.set('sub-1', {
       cancel,
       promise: Promise.resolve(),
     });
 
     const envelope = {
       frame: {
-        type: "DeliveryAck",
+        type: 'DeliveryAck',
         ok: false,
       },
-      corrId: "sub-1",
+      corrId: 'sub-1',
       replyTo: null,
     } as any;
 
-  const result = await agent.handleMessage(envelope);
+    const result = await agent.handleMessage(envelope);
     expect(result).toBeNull();
     expect(cancel).toHaveBeenCalledTimes(1);
   });
 
-  it("delegates non-RPC messages to onMessage", async () => {
+  it('delegates non-RPC messages to onMessage', async () => {
     const agent = new MessageRecorderAgent();
-    const envelope = createDataEnvelope({ message: "hello" });
+    const envelope = createDataEnvelope({ message: 'hello' });
 
     const result = await agent.handleMessage(envelope as any);
 
     expect(result).toBeNull();
-    expect(agent.messages).toEqual([{ message: "hello" }]);
+    expect(agent.messages).toEqual([{ message: 'hello' }]);
   });
 
-  it("throws for non-data frames", async () => {
-    const agent = new BaseAgent("frame-agent", {
+  it('throws for non-data frames', async () => {
+    const agent = new BaseAgent('frame-agent', {
       stateFactory: () => new CounterState(),
       storageProvider: new InMemoryStorageProvider(),
     });
 
     const envelope = {
       frame: {
-        type: "Heartbeat",
+        type: 'Heartbeat',
       },
       corrId: null,
       replyTo: null,
     } as any;
 
-  await expect(agent.handleMessage(envelope)).rejects.toThrow(
-      /Invalid envelope frame/,
-    );
+    await expect(agent.handleMessage(envelope)).rejects.toThrow(/Invalid envelope frame/);
   });
 
-  it("streams RPC responses to the fabric", async () => {
-    const agent = new BaseAgent("rpc-stream", {
+  it('streams RPC responses to the fabric', async () => {
+    const agent = new BaseAgent('rpc-stream', {
       stateFactory: () => new CounterState(),
       storageProvider: new InMemoryStorageProvider(),
     });
 
     const send = jest.fn(async () => {});
-    jest.spyOn(FameFabric, "current").mockReturnValue({ send } as any);
+    jest.spyOn(FameFabric, 'current').mockReturnValue({ send } as any);
 
-    const rpcSpy = jest.spyOn(rpcAdapter, "handleAgentRpcRequest");
-    rpcSpy.mockImplementationOnce(async function* () {
-      yield { jsonrpc: "2.0", id: "rpc-1", result: "first" };
-      yield { jsonrpc: "2.0", id: "rpc-1", result: "second" };
+    const rpcSpy = jest.spyOn(rpcAdapter, 'handleAgentRpcRequest');
+    rpcSpy.mockImplementationOnce(async function* (): AsyncGenerator<JSONRPCResponse> {
+      const first: JSONRPCResponse = { jsonrpc: '2.0', id: 'rpc-1', result: 'first' };
+      yield first;
+      const second: JSONRPCResponse = { jsonrpc: '2.0', id: 'rpc-1', result: 'second' };
+      yield second;
     });
 
     await (agent as any).streamSendSubscribe(
       {
-        jsonrpc: "2.0",
-        method: "tasks/sendSubscribe",
-        id: "rpc-1",
-        params: { reply_to: "reply@fabric" },
+        jsonrpc: '2.0',
+        method: 'tasks/sendSubscribe',
+        id: 'rpc-1',
+        params: { reply_to: 'reply@fabric' },
       },
-      "reply@fabric",
-      new globalThis.AbortController().signal,
+      'reply@fabric',
+      new globalThis.AbortController().signal
     );
 
     expect(send).toHaveBeenCalledTimes(2);
     const firstCall = send.mock.calls[0];
     expect(firstCall).toBeDefined();
     const [firstEnvelope] = firstCall as unknown as [FameEnvelope];
-    expect(firstEnvelope.corrId).toBe("rpc-1");
-    expect(firstEnvelope.to.toString()).toBe("reply@fabric");
+    expect(firstEnvelope.corrId).toBe('rpc-1');
+    expect(firstEnvelope.to).toBeInstanceOf(FameAddress);
+    expect(firstEnvelope.to?.toString()).toBe('reply@fabric');
 
-    rpcSpy.mockImplementationOnce(async function* () {
-      yield { jsonrpc: "2.0", id: "rpc-2", result: "ignored" };
+    rpcSpy.mockImplementationOnce(async function* (): AsyncGenerator<JSONRPCResponse> {
+      const ignored: JSONRPCResponse = { jsonrpc: '2.0', id: 'rpc-2', result: 'ignored' };
+      yield ignored;
     });
 
     send.mockClear();
 
     await (agent as any).streamSendSubscribe(
       {
-        jsonrpc: "2.0",
-        method: "tasks/sendSubscribe",
-        id: "rpc-2",
+        jsonrpc: '2.0',
+        method: 'tasks/sendSubscribe',
+        id: 'rpc-2',
         params: {},
       },
       null,
-      new globalThis.AbortController().signal,
+      new globalThis.AbortController().signal
     );
 
     expect(send).not.toHaveBeenCalled();
   });
 
-  it("handles subscribe RPC envelopes and cleans up subscriptions", async () => {
-    const agent = new BaseAgent("rpc-agent", {
+  it('handles subscribe RPC envelopes and cleans up subscriptions', async () => {
+    const agent = new BaseAgent('rpc-agent', {
       stateFactory: () => new CounterState(),
       storageProvider: new InMemoryStorageProvider(),
     });
 
     const send = jest.fn(async () => {});
-    jest.spyOn(FameFabric, "current").mockReturnValue({ send } as any);
+    jest.spyOn(FameFabric, 'current').mockReturnValue({ send } as any);
 
     jest
-      .spyOn(rpcAdapter, "handleAgentRpcRequest")
-      .mockImplementation(async function* () {
-        yield { jsonrpc: "2.0", id: "rpc-3", result: "payload" };
+      .spyOn(rpcAdapter, 'handleAgentRpcRequest')
+      .mockImplementation(async function* (): AsyncGenerator<JSONRPCResponse> {
+        const payload: JSONRPCResponse = { jsonrpc: '2.0', id: 'rpc-3', result: 'payload' };
+        yield payload;
       });
 
     const envelope = createFameEnvelope({
       frame: {
-        type: "Data",
+        type: 'Data',
         payload: {
-          jsonrpc: "2.0",
-          method: "tasks/sendSubscribe",
-          id: "rpc-3",
-          params: { reply_to: "reply@fabric" },
+          jsonrpc: '2.0',
+          method: 'tasks/sendSubscribe',
+          id: 'rpc-3',
+          params: { reply_to: 'reply@fabric' },
         },
       },
-      to: new FameAddress("test@fabric"),
+      to: new FameAddress('test@fabric'),
     });
 
-  await agent.handleMessage(envelope);
+    await agent.handleMessage(envelope);
 
-    const subscriptions: Map<string, { promise: Promise<void> }> = (
-      agent as any
-    )._subscriptions;
-    await Promise.all(
-      Array.from(subscriptions.values(), ({ promise }) =>
-        promise.catch(() => {}),
-      ),
-    );
+    const subscriptions: Map<string, { promise: Promise<void> }> = (agent as any)._subscriptions;
+    await Promise.all(Array.from(subscriptions.values(), ({ promise }) => promise.catch(() => {})));
 
     expect(send).toHaveBeenCalledTimes(1);
     expect(subscriptions.size).toBe(0);
   });
 
-  it("falls back to params when replyTo header is missing", async () => {
-    const agent = new BaseAgent("rpc-target", {
+  it('falls back to params when replyTo header is missing', async () => {
+    const agent = new BaseAgent('rpc-target', {
       stateFactory: () => new CounterState(),
       storageProvider: new InMemoryStorageProvider(),
     });
 
     jest
-      .spyOn(rpcAdapter, "handleAgentRpcRequest")
-      .mockImplementationOnce(async function* () {
-        yield { jsonrpc: "2.0", id: "rpc-4", result: "ok" };
+      .spyOn(rpcAdapter, 'handleAgentRpcRequest')
+      .mockImplementationOnce(async function* (): AsyncGenerator<JSONRPCResponse> {
+        const ok: JSONRPCResponse = { jsonrpc: '2.0', id: 'rpc-4', result: 'ok' };
+        yield ok;
       });
 
-  const responses = await agent.handleMessage(
+    const responses = await agent.handleMessage(
       createFameEnvelope({
         frame: {
-          type: "Data",
+          type: 'Data',
           payload: {
-            jsonrpc: "2.0",
-            method: "custom",
-            id: "rpc-4",
-            params: { reply_to: "reply@fabric" },
+            jsonrpc: '2.0',
+            method: 'custom',
+            id: 'rpc-4',
+            params: { reply_to: 'reply@fabric' },
           },
         },
-        to: new FameAddress("source@fabric"),
-      }),
+        to: new FameAddress('source@fabric'),
+      })
     );
 
     const yielded: FameMessageResponse[] = [];
@@ -421,31 +410,29 @@ describe("BaseAgent", () => {
     expect(yielded).toHaveLength(1);
   });
 
-  it("generates a name when serving anonymously", async () => {
-    const agent = new BaseAgent("served-agent", {
+  it('generates a name when serving anonymously', async () => {
+    const agent = new BaseAgent('served-agent', {
       stateFactory: () => new CounterState(),
       storageProvider: new InMemoryStorageProvider(),
     });
     (agent as any)._name = null;
 
-    const generateSpy = jest
-      .spyOn(runtime, "generateId")
-      .mockReturnValue("generated-id");
-    jest.spyOn(Agent.prototype, "aserve").mockResolvedValue();
+    const generateSpy = jest.spyOn(runtime, 'generateId').mockReturnValue('generated-id');
+    jest.spyOn(Agent.prototype, 'aserve').mockResolvedValue();
 
-    await agent.aserve("agent://service");
+    await agent.aserve('agent://service');
 
     expect(generateSpy).toHaveBeenCalled();
-    expect(agent.name).toBe("generated-id");
+    expect(agent.name).toBe('generated-id');
   });
 
-  it("derives default name and sanitizes generated namespaces", async () => {
+  it('derives default name and sanitizes generated namespaces', async () => {
     class XMLAgent extends BaseAgent<BaseAgentState> {
       constructor(provider: StorageProvider) {
         super(null, {
           stateFactory: () => new BaseAgentState(),
           stateModel: BaseAgentState,
-          stateNamespace: "***",
+          stateNamespace: '***',
           storageProvider: provider,
         });
       }
@@ -454,29 +441,29 @@ describe("BaseAgent", () => {
     const provider = new RecordingStorageProvider();
     const agent = new XMLAgent(provider);
 
-    expect(agent.name).toBe("xml_agent");
+    expect(agent.name).toBe('xml_agent');
     await agent.withState(async () => {});
-    expect(provider.namespaces).toContain("ns");
+    expect(provider.namespaces).toContain('ns');
   });
 
-  it("exposes immutable capability and address metadata", () => {
-    const agent = new BaseAgent("caps-agent", {
+  it('exposes immutable capability and address metadata', () => {
+    const agent = new BaseAgent('caps-agent', {
       stateFactory: () => new BaseAgentState(),
       storageProvider: new InMemoryStorageProvider(),
     });
 
     const capabilities = agent.capabilities;
-    capabilities.push("mutated");
-    expect(agent.capabilities).not.toContain("mutated");
+    capabilities.push('mutated');
+    expect(agent.capabilities).not.toContain('mutated');
 
-    const address = new FameAddress("caps@test");
+    const address = new FameAddress('caps@test');
     agent.address = address;
     expect(agent.address).toBe(address);
     expect(agent.spec.address).toBe(address.toString());
   });
 
-  it("implements default authentication and unsupported operations", async () => {
-    const agent = new BaseAgent("defaults", {
+  it('implements default authentication and unsupported operations', async () => {
+    const agent = new BaseAgent('defaults', {
       stateFactory: () => new BaseAgentState(),
       storageProvider: new InMemoryStorageProvider(),
     });
@@ -484,54 +471,52 @@ describe("BaseAgent", () => {
     expect(agent.authenticate({})).toBe(true);
 
     const pushConfig: TaskPushNotificationConfig = {
-      id: "task-123",
+      id: 'task-123',
       pushNotificationConfig: {
-        url: "https://callback",
+        url: 'https://callback',
         token: null,
         authentication: null,
       },
     };
 
     await expect(agent.registerPushEndpoint(pushConfig)).rejects.toBeInstanceOf(
-      PushNotificationNotSupportedException,
+      PushNotificationNotSupportedException
     );
-    await expect(agent.getPushNotificationConfig({
-      id: "task-123",
-      metadata: null,
-    })).rejects.toBeInstanceOf(PushNotificationNotSupportedException);
+    await expect(
+      agent.getPushNotificationConfig({
+        id: 'task-123',
+        metadata: null,
+      })
+    ).rejects.toBeInstanceOf(PushNotificationNotSupportedException);
 
-    await expect(
-      agent.unsubscribeTask({ id: "task-123", metadata: null }),
-    ).rejects.toBeInstanceOf(UnsupportedOperationException);
-    await expect(
-      agent.cancelTask({ id: "task-123", metadata: null }),
-    ).rejects.toBeInstanceOf(TaskNotCancelableException);
-    await expect(agent.getAgentCard()).rejects.toBeInstanceOf(
-      UnsupportedOperationException,
+    await expect(agent.unsubscribeTask({ id: 'task-123', metadata: null })).rejects.toBeInstanceOf(
+      UnsupportedOperationException
     );
-    await expect(
-      agent.getTaskStatus({ id: "task-123", metadata: null }),
-    ).rejects.toBeInstanceOf(UnsupportedOperationException);
-    await expect(agent.runTask(null, null)).rejects.toBeInstanceOf(
-      UnsupportedOperationException,
+    await expect(agent.cancelTask({ id: 'task-123', metadata: null })).rejects.toBeInstanceOf(
+      TaskNotCancelableException
     );
+    await expect(agent.getAgentCard()).rejects.toBeInstanceOf(UnsupportedOperationException);
+    await expect(agent.getTaskStatus({ id: 'task-123', metadata: null })).rejects.toBeInstanceOf(
+      UnsupportedOperationException
+    );
+    await expect(agent.runTask(null, null)).rejects.toBeInstanceOf(UnsupportedOperationException);
   });
 
-  it("logs unhandled messages via default onMessage", async () => {
-    const agent = new BaseAgent("logger", {
+  it('logs unhandled messages via default onMessage', async () => {
+    const agent = new BaseAgent('logger', {
       stateFactory: () => new BaseAgentState(),
       storageProvider: new InMemoryStorageProvider(),
     });
 
     const result = await BaseAgent.prototype.onMessage.call(agent, {
-      hello: "world",
+      hello: 'world',
     });
 
     expect(result).toBeNull();
   });
 
-  it("throws when no state model or factory is configured", () => {
-    const agent = new BaseAgent("stateless");
-    expect(() => agent.state).toThrow("No state model configured");
+  it('throws when no state model or factory is configured', () => {
+    const agent = new BaseAgent('stateless');
+    expect(() => agent.state).toThrow('No state model configured');
   });
 });

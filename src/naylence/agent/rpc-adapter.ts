@@ -1,9 +1,4 @@
-import {
-  JSONRPCError,
-  JSONRPCRequest,
-  JSONRPCRequestSchema,
-  JSONRPCResponse,
-} from "naylence-core";
+import { JSONRPCError, JSONRPCRequest, JSONRPCRequestSchema, JSONRPCResponse } from 'naylence-core';
 import {
   A2ARequestSchema,
   InternalError,
@@ -23,8 +18,8 @@ import {
   TaskSendParams,
   TaskStatusUpdateEvent,
   TaskStatusUpdateEventSchema,
-} from "./a2a-types.js";
-import { Agent } from "./agent.js";
+} from './a2a-types.js';
+import { Agent } from './agent.js';
 import {
   AgentException,
   AuthorizationException,
@@ -37,33 +32,30 @@ import {
   RateLimitExceededException,
   TaskNotCancelableException,
   UnsupportedOperationException,
-} from "./errors.js";
-import { extractId } from "./util.js";
+} from './errors.js';
+import { extractId } from './util.js';
 
-const JSONRPC_VERSION = "2.0";
+const JSONRPC_VERSION = '2.0';
 
 const A2A_METHODS = new Set([
-  "tasks/send",
-  "tasks/sendSubscribe",
-  "tasks/sendUnsubscribe",
-  "tasks/get",
-  "tasks/cancel",
-  "tasks/pushNotification/set",
-  "tasks/pushNotification/get",
-  "tasks/resubscribe",
-  "agent.get_card",
+  'tasks/send',
+  'tasks/sendSubscribe',
+  'tasks/sendUnsubscribe',
+  'tasks/get',
+  'tasks/cancel',
+  'tasks/pushNotification/set',
+  'tasks/pushNotification/get',
+  'tasks/resubscribe',
+  'agent.get_card',
 ]);
 
 function toJSONRPCError(error: unknown): JSONRPCError {
-  if (error && typeof error === "object") {
+  if (error && typeof error === 'object') {
     const maybeError = error as Record<string, unknown>;
-    if (typeof maybeError.toJSON === "function") {
+    if (typeof maybeError.toJSON === 'function') {
       return maybeError.toJSON();
     }
-    if (
-      typeof maybeError.code === "number" &&
-      typeof maybeError.message === "string"
-    ) {
+    if (typeof maybeError.code === 'number' && typeof maybeError.message === 'string') {
       return {
         code: maybeError.code,
         message: maybeError.message,
@@ -85,10 +77,7 @@ function toJSONRPCError(error: unknown): JSONRPCError {
   } satisfies JSONRPCError;
 }
 
-function createErrorResponse(
-  id: JSONRPCResponse["id"],
-  error: unknown,
-): JSONRPCResponse {
+function createErrorResponse(id: JSONRPCResponse['id'], error: unknown): JSONRPCResponse {
   return {
     jsonrpc: JSONRPC_VERSION,
     id,
@@ -96,10 +85,7 @@ function createErrorResponse(
   };
 }
 
-function createResultResponse(
-  id: JSONRPCResponse["id"],
-  result: unknown,
-): JSONRPCResponse {
+function createResultResponse(id: JSONRPCResponse['id'], result: unknown): JSONRPCResponse {
   return {
     jsonrpc: JSONRPC_VERSION,
     id,
@@ -111,7 +97,7 @@ function normalizeRpcParams(params: unknown): {
   args: unknown[];
   kwargs: Record<string, unknown>;
 } {
-  if (!params || typeof params !== "object") {
+  if (!params || typeof params !== 'object') {
     return { args: [], kwargs: {} };
   }
 
@@ -121,7 +107,7 @@ function normalizeRpcParams(params: unknown): {
 
   const args = Array.isArray(argsCandidate) ? [...argsCandidate] : [];
   const kwargs =
-    kwargsCandidate && typeof kwargsCandidate === "object"
+    kwargsCandidate && typeof kwargsCandidate === 'object'
       ? { ...(kwargsCandidate as Record<string, unknown>) }
       : {};
 
@@ -134,7 +120,7 @@ function normalizeRpcParams(params: unknown): {
 
 async function* handleA2ARpcRequest(
   agent: Agent,
-  a2aRequest: JSONRPCRequest,
+  a2aRequest: JSONRPCRequest
 ): AsyncGenerator<JSONRPCResponse> {
   const id = a2aRequest.id ?? null;
 
@@ -144,55 +130,47 @@ async function* handleA2ARpcRequest(
   } catch (error) {
     yield createErrorResponse(
       id,
-      new InvalidRequestError(
-        error instanceof Error ? error.message : String(error),
-      ),
+      new InvalidRequestError(error instanceof Error ? error.message : String(error))
     );
     return;
   }
 
   try {
     switch (parsed.method) {
-      case "tasks/send": {
+      case 'tasks/send': {
         const result = await agent.startTask(parsed.params as TaskSendParams);
         yield createResultResponse(id, serializeTask(result));
         break;
       }
-      case "tasks/get": {
-        const result = await agent.getTaskStatus(
-          parsed.params as TaskQueryParams,
-        );
+      case 'tasks/get': {
+        const result = await agent.getTaskStatus(parsed.params as TaskQueryParams);
         yield createResultResponse(id, result ? serializeTask(result) : null);
         break;
       }
-      case "tasks/cancel": {
+      case 'tasks/cancel': {
         const result = await agent.cancelTask(parsed.params as TaskIdParams);
         yield createResultResponse(id, result ? serializeTask(result) : null);
         break;
       }
-      case "tasks/pushNotification/set": {
+      case 'tasks/pushNotification/set': {
         const result = await agent.registerPushEndpoint(
-          parsed.params as TaskPushNotificationConfig,
+          parsed.params as TaskPushNotificationConfig
         );
         yield createResultResponse(id, result ?? null);
         break;
       }
-      case "tasks/pushNotification/get": {
-        const result = await agent.getPushNotificationConfig(
-          parsed.params as TaskIdParams,
-        );
+      case 'tasks/pushNotification/get': {
+        const result = await agent.getPushNotificationConfig(parsed.params as TaskIdParams);
         yield createResultResponse(id, result ?? null);
         break;
       }
-      case "agent.get_card": {
+      case 'agent.get_card': {
         const result = await agent.getAgentCard();
         yield createResultResponse(id, result);
         break;
       }
-      case "tasks/sendSubscribe": {
-        const stream = await agent.subscribeToTaskUpdates(
-          parsed.params as TaskSendParams,
-        );
+      case 'tasks/sendSubscribe': {
+        const stream = await agent.subscribeToTaskUpdates(parsed.params as TaskSendParams);
         for await (const event of stream as AsyncIterable<
           TaskStatusUpdateEvent | TaskArtifactUpdateEvent
         >) {
@@ -203,16 +181,13 @@ async function* handleA2ARpcRequest(
               status: serializeTaskStatus(payload.status),
             });
           } else {
-            yield createResultResponse(
-              id,
-              TaskArtifactUpdateEventSchema.parse(event),
-            );
+            yield createResultResponse(id, TaskArtifactUpdateEventSchema.parse(event));
           }
         }
         yield createResultResponse(id, null);
         break;
       }
-      case "tasks/sendUnsubscribe": {
+      case 'tasks/sendUnsubscribe': {
         await agent.unsubscribeTask(parsed.params as TaskIdParams);
         yield createResultResponse(id, null);
         break;
@@ -224,10 +199,7 @@ async function* handleA2ARpcRequest(
   } catch (error) {
     if (error instanceof InvalidTaskException) {
       yield createErrorResponse(id, new InvalidParamsError(error.message));
-    } else if (
-      error instanceof DuplicateTaskException ||
-      error instanceof ConflictException
-    ) {
+    } else if (error instanceof DuplicateTaskException || error instanceof ConflictException) {
       yield createErrorResponse(id, new InvalidParamsError(error.message));
     } else if (error instanceof NoDataFoundException) {
       yield createErrorResponse(id, new InvalidParamsError(error.message));
@@ -238,21 +210,18 @@ async function* handleA2ARpcRequest(
     } else if (error instanceof PushNotificationNotSupportedException) {
       yield createErrorResponse(id, new PushNotificationNotSupportedError());
     } else if (error instanceof UnsupportedOperationException) {
-      yield createErrorResponse(
-        id,
-        new UnsupportedOperationError(error.message),
-      );
+      yield createErrorResponse(id, new UnsupportedOperationError(error.message));
     } else if (error instanceof AuthorizationException) {
       const payload: JSONRPCError = {
         code: -32600,
-        message: "Unauthorized",
+        message: 'Unauthorized',
         data: error.message,
       };
       yield createErrorResponse(id, payload);
     } else if (error instanceof RateLimitExceededException) {
       const payload: JSONRPCError = {
         code: -32029,
-        message: "Rate limit exceeded",
+        message: 'Rate limit exceeded',
         data: error.message,
       };
       yield createErrorResponse(id, payload);
@@ -261,17 +230,13 @@ async function* handleA2ARpcRequest(
     } else {
       yield createErrorResponse(
         id,
-        new InternalError(
-          error instanceof Error ? error.message : String(error),
-        ),
+        new InternalError(error instanceof Error ? error.message : String(error))
       );
     }
   }
 }
 
-function getRpcRegistry(
-  agent: Agent,
-): Map<string, { propertyKey: string; streaming: boolean }> {
+function getRpcRegistry(agent: Agent): Map<string, { propertyKey: string; streaming: boolean }> {
   const ctor = agent.constructor as {
     rpcRegistry?: Map<string, { propertyKey: string; streaming: boolean }>;
   };
@@ -281,7 +246,7 @@ function getRpcRegistry(
 
 async function* handleCustomRpcRequest(
   agent: Agent,
-  request: JSONRPCRequest,
+  request: JSONRPCRequest
 ): AsyncGenerator<JSONRPCResponse> {
   const registry = getRpcRegistry(agent);
   const entry = registry.get(request.method);
@@ -291,14 +256,11 @@ async function* handleCustomRpcRequest(
     return;
   }
 
-  const handlerValue = Reflect.get(
-    agent as object,
-    entry.propertyKey,
-  ) as unknown;
-  if (typeof handlerValue !== "function") {
+  const handlerValue = Reflect.get(agent as object, entry.propertyKey) as unknown;
+  if (typeof handlerValue !== 'function') {
     yield createErrorResponse(
       request.id ?? null,
-      new InternalError(`Handler '${entry.propertyKey}' is not callable`),
+      new InternalError(`Handler '${entry.propertyKey}' is not callable`)
     );
     return;
   }
@@ -314,10 +276,7 @@ async function* handleCustomRpcRequest(
         callArgs.push(kwargs);
       }
 
-      const iterator = (await handler.apply(
-        agent,
-        callArgs,
-      )) as AsyncIterable<unknown>;
+      const iterator = (await handler.apply(agent, callArgs)) as AsyncIterable<unknown>;
       for await (const chunk of iterator) {
         yield createResultResponse(request.id ?? null, chunk);
       }
@@ -335,14 +294,14 @@ async function* handleCustomRpcRequest(
   } catch (error) {
     yield createErrorResponse(
       request.id ?? null,
-      new InternalError(error instanceof Error ? error.message : String(error)),
+      new InternalError(error instanceof Error ? error.message : String(error))
     );
   }
 }
 
 export async function* handleAgentRpcRequest(
   agent: Agent,
-  rawRpcRequest: Record<string, unknown>,
+  rawRpcRequest: Record<string, unknown>
 ): AsyncGenerator<JSONRPCResponse> {
   let genericRequest: JSONRPCRequest;
 
@@ -352,9 +311,7 @@ export async function* handleAgentRpcRequest(
     const id = extractId(rawRpcRequest);
     yield createErrorResponse(
       id ?? null,
-      new InvalidRequestError(
-        error instanceof Error ? error.message : String(error),
-      ),
+      new InvalidRequestError(error instanceof Error ? error.message : String(error))
     );
     return;
   }

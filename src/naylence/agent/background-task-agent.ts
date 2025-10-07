@@ -1,4 +1,4 @@
-import { AsyncLock, getLogger } from "naylence-runtime";
+import { AsyncLock, getLogger } from 'naylence-runtime';
 
 import {
   type Artifact,
@@ -11,20 +11,20 @@ import {
   TaskState,
   type TaskStatus,
   type TaskStatusUpdateEvent,
-} from "./a2a-types.js";
+} from './a2a-types.js';
 import {
   BaseAgent,
   type BaseAgentOptions,
   type BaseAgentState,
   TERMINAL_TASK_STATES,
-} from "./base-agent.js";
-import { makeMessage } from "./util.js";
+} from './base-agent.js';
+import { makeMessage } from './util.js';
 
-const logger = getLogger("naylence.agent.background-task-agent");
+const logger = getLogger('naylence.agent.background-task-agent');
 
 const DEFAULT_EVENT_QUEUE_SIZE = 1000;
 const END_OF_STREAM_SENTINEL: TaskStatusUpdateEvent = Object.freeze({
-  id: "__sentinel__",
+  id: '__sentinel__',
   status: {
     state: TaskState.UNKNOWN,
     message: null,
@@ -34,7 +34,7 @@ const END_OF_STREAM_SENTINEL: TaskStatusUpdateEvent = Object.freeze({
   metadata: null,
 });
 
-const TIMEOUT_SYMBOL = Symbol("background-task-queue-timeout");
+const TIMEOUT_SYMBOL = Symbol('background-task-queue-timeout');
 
 type TaskEvent = TaskStatusUpdateEvent | TaskArtifactUpdateEvent;
 
@@ -44,10 +44,7 @@ type CompletedEntry = {
 };
 
 function monotonicSeconds(): number {
-  if (
-    typeof performance !== "undefined" &&
-    typeof performance.now === "function"
-  ) {
+  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
     return performance.now() / 1000;
   }
   return Date.now() / 1000;
@@ -56,8 +53,8 @@ function monotonicSeconds(): number {
 async function delay(ms: number): Promise<void> {
   await new Promise<void>((resolve) => {
     const timeout = globalThis.setTimeout;
-    if (typeof timeout !== "function") {
-      throw new Error("setTimeout is not available in the current environment");
+    if (typeof timeout !== 'function') {
+      throw new Error('setTimeout is not available in the current environment');
     }
     timeout(resolve, ms);
   });
@@ -126,7 +123,7 @@ function errorToString(error: unknown): string {
   if (error instanceof Error) {
     return error.message || error.toString();
   }
-  if (typeof error === "string") {
+  if (typeof error === 'string') {
     return error;
   }
   try {
@@ -150,10 +147,7 @@ export abstract class BackgroundTaskAgent<
   private readonly maxQueueSize: number;
   private readonly maxTaskLifetimeMs: number | null;
   private readonly taskStatuses = new Map<string, TaskStatus>();
-  private readonly taskEventQueues = new Map<
-    string,
-    AsyncEventQueue<TaskEvent>
-  >();
+  private readonly taskEventQueues = new Map<string, AsyncEventQueue<TaskEvent>>();
   private readonly completed = new Map<string, CompletedEntry>();
   private readonly completedCacheSize: number;
   private readonly completedCacheTtlSec: number;
@@ -161,7 +155,7 @@ export abstract class BackgroundTaskAgent<
 
   protected constructor(
     name: string | null = null,
-    options: BackgroundTaskAgentOptions<StateT> = {},
+    options: BackgroundTaskAgentOptions<StateT> = {}
   ) {
     const {
       maxQueueSize = DEFAULT_EVENT_QUEUE_SIZE,
@@ -190,7 +184,7 @@ export abstract class BackgroundTaskAgent<
   async startTask(params: TaskSendParams): Promise<Task> {
     this.taskEventQueues.set(
       params.id,
-      new AsyncEventQueue<TaskEvent | TaskStatusUpdateEvent>(this.maxQueueSize),
+      new AsyncEventQueue<TaskEvent | TaskStatusUpdateEvent>(this.maxQueueSize)
     );
 
     await this.updateTaskState(params.id, TaskState.WORKING);
@@ -221,26 +215,16 @@ export abstract class BackgroundTaskAgent<
     }
   }
 
-  private async runBackgroundTaskInternal(
-    params: TaskSendParams,
-  ): Promise<void> {
+  private async runBackgroundTaskInternal(params: TaskSendParams): Promise<void> {
     try {
       const result = await this.runBackgroundTask(params);
       const messagePayload = this.normalizeResultPayload(result);
       const message = makeMessage(messagePayload);
-      await this.updateTaskState(
-        params.id,
-        TaskState.COMPLETED,
-        message ?? undefined,
-      );
+      await this.updateTaskState(params.id, TaskState.COMPLETED, message ?? undefined);
     } catch (error) {
       const errorMessage = makeMessage(errorToString(error));
-      await this.updateTaskState(
-        params.id,
-        TaskState.FAILED,
-        errorMessage ?? undefined,
-      );
-      logger.error("background_task_failed", {
+      await this.updateTaskState(params.id, TaskState.FAILED, errorMessage ?? undefined);
+      logger.error('background_task_failed', {
         taskId: params.id,
         error,
       });
@@ -252,9 +236,7 @@ export abstract class BackgroundTaskAgent<
     }
   }
 
-  protected abstract runBackgroundTask(
-    params: TaskSendParams,
-  ): Promise<unknown>;
+  protected abstract runBackgroundTask(params: TaskSendParams): Promise<unknown>;
 
   async getTaskState(taskId: string): Promise<TaskState> {
     try {
@@ -287,7 +269,7 @@ export abstract class BackgroundTaskAgent<
   async updateTaskState(
     taskId: string,
     state: TaskState,
-    message?: Message | null,
+    message?: Message | null
   ): Promise<boolean> {
     return await this.statusLock.runExclusive(async () => {
       if (this.isTerminalTaskState(taskId)) {
@@ -304,7 +286,7 @@ export abstract class BackgroundTaskAgent<
 
       const queue = this.taskEventQueues.get(taskId);
       if (!queue) {
-        logger.warning("task_state_update_missing_queue", { taskId });
+        logger.warning('task_state_update_missing_queue', { taskId });
         return false;
       }
 
@@ -353,7 +335,7 @@ export abstract class BackgroundTaskAgent<
   async updateTaskArtifact(taskId: string, artifact: Artifact): Promise<void> {
     const queue = this.taskEventQueues.get(taskId);
     if (!queue) {
-      logger.warning("task_artifact_update_missing_queue", { taskId });
+      logger.warning('task_artifact_update_missing_queue', { taskId });
       return;
     }
 
@@ -373,10 +355,7 @@ export abstract class BackgroundTaskAgent<
     const stream = async function* (): AsyncIterable<TaskEvent> {
       if (!queue) {
         const entry = self.completed.get(params.id);
-        if (
-          entry &&
-          monotonicSeconds() - entry.timestamp <= self.completedCacheTtlSec
-        ) {
+        if (entry && monotonicSeconds() - entry.timestamp <= self.completedCacheTtlSec) {
           yield {
             id: params.id,
             status: entry.status,
@@ -408,7 +387,7 @@ export abstract class BackgroundTaskAgent<
           break;
         }
 
-        if ("status" in event && TERMINAL_TASK_STATES.has(event.status.state)) {
+        if ('status' in event && TERMINAL_TASK_STATES.has(event.status.state)) {
           if (seenTerminal) {
             continue;
           }
@@ -441,16 +420,14 @@ export abstract class BackgroundTaskAgent<
     this.taskEventQueues.delete(taskId);
   }
 
-  private normalizeResultPayload(
-    result: unknown,
-  ): string | Record<string, unknown> | null {
+  private normalizeResultPayload(result: unknown): string | Record<string, unknown> | null {
     if (result === null || result === undefined) {
       return null;
     }
-    if (typeof result === "string") {
+    if (typeof result === 'string') {
       return result;
     }
-    if (typeof result === "object") {
+    if (typeof result === 'object') {
       return result as Record<string, unknown>;
     }
     return String(result);

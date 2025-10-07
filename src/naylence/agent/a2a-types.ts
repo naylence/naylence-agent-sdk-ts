@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 import {
   JSONRPCError,
   JSONRPCErrorSchema,
@@ -7,24 +7,24 @@ import {
   JSONRPCResponse,
   JSONRPCResponseSchema,
   generateId,
-} from "naylence-core";
+} from 'naylence-core';
 
 type Metadata = Record<string, any>;
 
 const MetadataSchema: z.ZodType<Metadata> = z.record(z.string(), z.any());
 
 export enum TaskState {
-  SUBMITTED = "submitted",
-  WORKING = "working",
-  INPUT_REQUIRED = "input-required",
-  COMPLETED = "completed",
-  CANCELED = "canceled",
-  FAILED = "failed",
-  UNKNOWN = "unknown",
+  SUBMITTED = 'submitted',
+  WORKING = 'working',
+  INPUT_REQUIRED = 'input-required',
+  COMPLETED = 'completed',
+  CANCELED = 'canceled',
+  FAILED = 'failed',
+  UNKNOWN = 'unknown',
 }
 
 export const TextPartSchema = z.object({
-  type: z.literal("text"),
+  type: z.literal('text'),
   text: z.string(),
   metadata: MetadataSchema.nullable().optional(),
 });
@@ -46,12 +46,12 @@ export const FileContentSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Either 'bytes' or 'uri' must be present in the file data",
-        path: ["bytes"],
+        path: ['bytes'],
       });
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Either 'bytes' or 'uri' must be present in the file data",
-        path: ["uri"],
+        path: ['uri'],
       });
     }
 
@@ -59,12 +59,12 @@ export const FileContentSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Only one of 'bytes' or 'uri' can be present in the file data",
-        path: ["bytes"],
+        path: ['bytes'],
       });
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Only one of 'bytes' or 'uri' can be present in the file data",
-        path: ["uri"],
+        path: ['uri'],
       });
     }
   });
@@ -72,7 +72,7 @@ export const FileContentSchema = z
 export type FileContent = z.infer<typeof FileContentSchema>;
 
 export const FilePartSchema = z.object({
-  type: z.literal("file"),
+  type: z.literal('file'),
   file: FileContentSchema,
   metadata: MetadataSchema.nullable().optional(),
 });
@@ -80,14 +80,14 @@ export const FilePartSchema = z.object({
 export type FilePart = z.infer<typeof FilePartSchema>;
 
 export const DataPartSchema = z.object({
-  type: z.literal("data"),
+  type: z.literal('data'),
   data: MetadataSchema,
   metadata: MetadataSchema.nullable().optional(),
 });
 
 export type DataPart = z.infer<typeof DataPartSchema>;
 
-export const PartSchema = z.discriminatedUnion("type", [
+export const PartSchema = z.discriminatedUnion('type', [
   TextPartSchema,
   FilePartSchema,
   DataPartSchema,
@@ -96,7 +96,7 @@ export const PartSchema = z.discriminatedUnion("type", [
 export type Part = z.infer<typeof PartSchema>;
 
 export const MessageSchema = z.object({
-  role: z.union([z.literal("user"), z.literal("agent")]),
+  role: z.union([z.literal('user'), z.literal('agent')]),
   parts: z.array(PartSchema),
   metadata: MetadataSchema.nullable().optional(),
 });
@@ -112,7 +112,7 @@ const TimestampSchema = z.preprocess((value) => {
     return value;
   }
 
-  if (typeof value === "string" || typeof value === "number") {
+  if (typeof value === 'string' || typeof value === 'number') {
     const parsed = new Date(value);
     if (!Number.isNaN(parsed.getTime())) {
       return parsed;
@@ -168,9 +168,7 @@ export const TaskArtifactUpdateEventSchema = z.object({
   metadata: MetadataSchema.nullable().optional(),
 });
 
-export type TaskArtifactUpdateEvent = z.infer<
-  typeof TaskArtifactUpdateEventSchema
->;
+export type TaskArtifactUpdateEvent = z.infer<typeof TaskArtifactUpdateEventSchema>;
 
 export const AuthenticationInfoSchema = z
   .object({
@@ -187,9 +185,7 @@ export const PushNotificationConfigSchema = z.object({
   authentication: AuthenticationInfoSchema.nullable().optional(),
 });
 
-export type PushNotificationConfig = z.infer<
-  typeof PushNotificationConfigSchema
->;
+export type PushNotificationConfig = z.infer<typeof PushNotificationConfigSchema>;
 
 export const TaskIdParamsSchema = z.object({
   id: z.string(),
@@ -221,82 +217,76 @@ export const TaskPushNotificationConfigSchema = z.object({
   pushNotificationConfig: PushNotificationConfigSchema,
 });
 
-export type TaskPushNotificationConfig = z.infer<
-  typeof TaskPushNotificationConfigSchema
->;
+export type TaskPushNotificationConfig = z.infer<typeof TaskPushNotificationConfigSchema>;
 
-const createRequestSchema = <P, M extends string>(
-  method: M,
-  paramsSchema: z.ZodType<P>,
-) =>
+const createRequestSchema = <P, M extends string>(method: M, paramsSchema: z.ZodType<P>) =>
   JSONRPCRequestSchema.extend({
     method: z.literal(method),
     params: paramsSchema,
   });
 
-export const SendTaskRequestSchema = createRequestSchema(
-  "tasks/send",
-  TaskSendParamsSchema,
-);
+export const SendTaskRequestSchema = createRequestSchema('tasks/send', TaskSendParamsSchema);
 export type SendTaskRequest = JSONRPCRequest<TaskSendParams> & {
-  method: "tasks/send";
+  method: 'tasks/send';
 };
 
-export const GetTaskRequestSchema = createRequestSchema(
-  "tasks/get",
-  TaskQueryParamsSchema,
-);
+export const GetTaskRequestSchema = createRequestSchema('tasks/get', TaskQueryParamsSchema);
 export type GetTaskRequest = JSONRPCRequest<TaskQueryParams> & {
-  method: "tasks/get";
+  method: 'tasks/get';
 };
 
-export const CancelTaskRequestSchema = createRequestSchema(
-  "tasks/cancel",
-  TaskIdParamsSchema,
-);
+export const CancelTaskRequestSchema = createRequestSchema('tasks/cancel', TaskIdParamsSchema);
 export type CancelTaskRequest = JSONRPCRequest<TaskIdParams> & {
-  method: "tasks/cancel";
+  method: 'tasks/cancel';
 };
 
 export const SetTaskPushNotificationRequestSchema = createRequestSchema(
-  "tasks/pushNotification/set",
-  TaskPushNotificationConfigSchema,
+  'tasks/pushNotification/set',
+  TaskPushNotificationConfigSchema
 );
-export type SetTaskPushNotificationRequest =
-  JSONRPCRequest<TaskPushNotificationConfig> & {
-    method: "tasks/pushNotification/set";
-  };
+export type SetTaskPushNotificationRequest = JSONRPCRequest<TaskPushNotificationConfig> & {
+  method: 'tasks/pushNotification/set';
+};
 
 export const GetTaskPushNotificationRequestSchema = createRequestSchema(
-  "tasks/pushNotification/get",
-  TaskIdParamsSchema,
+  'tasks/pushNotification/get',
+  TaskIdParamsSchema
 );
 export type GetTaskPushNotificationRequest = JSONRPCRequest<TaskIdParams> & {
-  method: "tasks/pushNotification/get";
+  method: 'tasks/pushNotification/get';
 };
 
 export const TaskResubscriptionRequestSchema = createRequestSchema(
-  "tasks/resubscribe",
-  TaskIdParamsSchema,
+  'tasks/resubscribe',
+  TaskIdParamsSchema
 );
 export type TaskResubscriptionRequest = JSONRPCRequest<TaskIdParams> & {
-  method: "tasks/resubscribe";
+  method: 'tasks/resubscribe';
 };
 
 export const SendTaskStreamingRequestSchema = createRequestSchema(
-  "tasks/sendSubscribe",
-  TaskSendParamsSchema,
+  'tasks/sendSubscribe',
+  TaskSendParamsSchema
 );
 export type SendTaskStreamingRequest = JSONRPCRequest<TaskSendParams> & {
-  method: "tasks/sendSubscribe";
+  method: 'tasks/sendSubscribe';
 };
 
 export const StopTaskStreamingRequestSchema = createRequestSchema(
-  "tasks/sendUnsubscribe",
-  TaskIdParamsSchema,
+  'tasks/sendUnsubscribe',
+  TaskIdParamsSchema
 );
 export type StopTaskStreamingRequest = JSONRPCRequest<TaskIdParams> & {
-  method: "tasks/sendUnsubscribe";
+  method: 'tasks/sendUnsubscribe';
+};
+
+export const GetAgentCardRequestSchema = JSONRPCRequestSchema.extend({
+  method: z.literal('agent.get_card'),
+  params: z.object({}).default({}),
+});
+export type GetAgentCardRequest = JSONRPCRequest & {
+  method: 'agent.get_card';
+  params: Record<string, never>;
 };
 
 const nullableTaskSchema = TaskSchema.nullable().optional();
@@ -322,21 +312,18 @@ export type CancelTaskResponse = JSONRPCResponse & {
   result?: Task | null;
 };
 
-const nullablePushConfigSchema =
-  TaskPushNotificationConfigSchema.nullable().optional();
+const nullablePushConfigSchema = TaskPushNotificationConfigSchema.nullable().optional();
 
-export const SetTaskPushNotificationResponseSchema =
-  JSONRPCResponseSchema.extend({
-    result: nullablePushConfigSchema,
-  });
+export const SetTaskPushNotificationResponseSchema = JSONRPCResponseSchema.extend({
+  result: nullablePushConfigSchema,
+});
 export type SetTaskPushNotificationResponse = JSONRPCResponse & {
   result?: TaskPushNotificationConfig | null;
 };
 
-export const GetTaskPushNotificationResponseSchema =
-  JSONRPCResponseSchema.extend({
-    result: nullablePushConfigSchema,
-  });
+export const GetTaskPushNotificationResponseSchema = JSONRPCResponseSchema.extend({
+  result: nullablePushConfigSchema,
+});
 export type GetTaskPushNotificationResponse = JSONRPCResponse & {
   result?: TaskPushNotificationConfig | null;
 };
@@ -362,10 +349,11 @@ const RequestSchemas = [
   TaskResubscriptionRequestSchema,
   SendTaskStreamingRequestSchema,
   StopTaskStreamingRequestSchema,
+  GetAgentCardRequestSchema,
 ] as const;
 
 export const A2ARequestSchema = z.discriminatedUnion(
-  "method",
+  'method',
   RequestSchemas.map((schema) => schema) as unknown as [
     typeof SendTaskRequestSchema,
     typeof GetTaskRequestSchema,
@@ -375,7 +363,8 @@ export const A2ARequestSchema = z.discriminatedUnion(
     typeof TaskResubscriptionRequestSchema,
     typeof SendTaskStreamingRequestSchema,
     typeof StopTaskStreamingRequestSchema,
-  ],
+    typeof GetAgentCardRequestSchema,
+  ]
 );
 
 export type A2ARequest = z.infer<typeof A2ARequestSchema>;
@@ -388,7 +377,7 @@ export function safeParseA2ARequest(payload: unknown) {
   return A2ARequestSchema.safeParse(payload);
 }
 
-export interface TaskStatusJSON extends Omit<TaskStatus, "timestamp"> {
+export interface TaskStatusJSON extends Omit<TaskStatus, 'timestamp'> {
   timestamp: string;
 }
 
@@ -399,7 +388,7 @@ export function serializeTaskStatus(status: TaskStatus): TaskStatusJSON {
   };
 }
 
-export interface TaskJSON extends Omit<Task, "status"> {
+export interface TaskJSON extends Omit<Task, 'status'> {
   status: TaskStatusJSON;
 }
 
@@ -435,7 +424,7 @@ function createRpcError(
   defaults: {
     code: number;
     message: string;
-  },
+  }
 ) {
   return class extends JSONRPCErrorBase {
     constructor(message = defaults.message, data?: any) {
@@ -451,62 +440,53 @@ function createRpcError(
 
 export class JSONParseError extends createRpcError(JSONRPCErrorSchema, {
   code: -32700,
-  message: "Invalid JSON payload",
+  message: 'Invalid JSON payload',
 }) {}
 
 export class InvalidRequestError extends createRpcError(JSONRPCErrorSchema, {
   code: -32600,
-  message: "Request payload validation error",
+  message: 'Request payload validation error',
 }) {}
 
 export class MethodNotFoundError extends createRpcError(JSONRPCErrorSchema, {
   code: -32601,
-  message: "Method not found",
+  message: 'Method not found',
 }) {}
 
 export class InvalidParamsError extends createRpcError(JSONRPCErrorSchema, {
   code: -32602,
-  message: "Invalid parameters",
+  message: 'Invalid parameters',
 }) {}
 
 export class InternalError extends createRpcError(JSONRPCErrorSchema, {
   code: -32603,
-  message: "Internal error",
+  message: 'Internal error',
 }) {}
 
 export class TaskNotFoundError extends createRpcError(JSONRPCErrorSchema, {
   code: -32001,
-  message: "Task not found",
+  message: 'Task not found',
 }) {}
 
 export class TaskNotCancelableError extends createRpcError(JSONRPCErrorSchema, {
   code: -32002,
-  message: "Task cannot be canceled",
+  message: 'Task cannot be canceled',
 }) {}
 
-export class PushNotificationNotSupportedError extends createRpcError(
-  JSONRPCErrorSchema,
-  {
-    code: -32003,
-    message: "Push Notification is not supported",
-  },
-) {}
+export class PushNotificationNotSupportedError extends createRpcError(JSONRPCErrorSchema, {
+  code: -32003,
+  message: 'Push Notification is not supported',
+}) {}
 
-export class UnsupportedOperationError extends createRpcError(
-  JSONRPCErrorSchema,
-  {
-    code: -32004,
-    message: "This operation is not supported",
-  },
-) {}
+export class UnsupportedOperationError extends createRpcError(JSONRPCErrorSchema, {
+  code: -32004,
+  message: 'This operation is not supported',
+}) {}
 
-export class ContentTypeNotSupportedError extends createRpcError(
-  JSONRPCErrorSchema,
-  {
-    code: -32005,
-    message: "Incompatible content types",
-  },
-) {}
+export class ContentTypeNotSupportedError extends createRpcError(JSONRPCErrorSchema, {
+  code: -32005,
+  message: 'Incompatible content types',
+}) {}
 
 export const AgentProviderSchema = z.object({
   organization: z.string(),
@@ -551,8 +531,8 @@ export const AgentCardSchema = z.object({
   documentationUrl: z.string().nullable().optional(),
   capabilities: AgentCapabilitiesSchema,
   authentication: AgentAuthenticationSchema.nullable().optional(),
-  defaultInputModes: z.array(z.string()).default(["text"]),
-  defaultOutputModes: z.array(z.string()).default(["text"]),
+  defaultInputModes: z.array(z.string()).default(['text']),
+  defaultOutputModes: z.array(z.string()).default(['text']),
   skills: z.array(AgentSkillSchema),
 });
 

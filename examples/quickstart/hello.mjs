@@ -12,6 +12,7 @@ class EchoAgent extends BaseAgent {
 async function main() {
     await withFabric(async (fabric) => {
         const agentAddress = await fabric.serve(new EchoAgent());
+        console.log(`Agent is listening at address: ${agentAddress}`);
         const remoteAgent = Agent.remoteByAddress(agentAddress);
         const result = await remoteAgent.runTask("Hello, World!");
         console.log(result);

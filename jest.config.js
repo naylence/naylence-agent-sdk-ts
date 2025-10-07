@@ -13,7 +13,14 @@ export default {
       }
     ]
   },
-  collectCoverageFrom: ['src/**/*.ts', '!src/**/*.d.ts', '!src/**/__tests__/**', '!src/**/index.ts'],
+  collectCoverageFrom: [
+    'src/**/*.ts',
+    '!src/**/*.d.ts',
+    '!src/**/__tests__/**',
+    '!src/**/index.ts',
+    '!src/browser.ts',
+    '!src/naylence/agent/configs.ts'
+  ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   coverageProvider: 'v8',
@@ -26,7 +33,10 @@ export default {
   ],
   setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
   moduleNameMapper: {
-    '^(\\.{1,2}/.*)\\.js$': '$1'
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+    '^naylence-core$': '<rootDir>/../naylence-core-ts/dist/cjs/index.js',
+    '^naylence-factory$': '<rootDir>/../naylence-factory-ts/dist/cjs/index.js',
+    '^naylence-runtime$': '<rootDir>/../naylence-runtime-ts/dist/cjs/index.js'
   },
   testTimeout: 30000,
   maxWorkers: 1

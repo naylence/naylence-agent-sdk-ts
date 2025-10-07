@@ -1,24 +1,24 @@
-import { jest } from "@jest/globals";
+import { jest } from '@jest/globals';
 
 import {
   type BackgroundTaskAgentOptions,
   BackgroundTaskAgent,
-} from "../naylence/agent/background-task-agent.js";
+} from '../naylence/agent/background-task-agent.js';
 import {
   type Artifact,
   type Message,
   TaskSendParams,
   TaskState,
   type TaskStatusUpdateEvent,
-} from "../naylence/agent/a2a-types.js";
-import { BaseAgentState } from "../naylence/agent/base-agent.js";
+} from '../naylence/agent/a2a-types.js';
+import { BaseAgentState } from '../naylence/agent/base-agent.js';
 
 function createMessage(text: string): Message {
   return {
-    role: "user",
+    role: 'user',
     parts: [
       {
-        type: "text",
+        type: 'text',
         text,
         metadata: null,
       },
@@ -45,7 +45,7 @@ function createArtifact(name: string): Artifact {
     description: null,
     parts: [
       {
-        type: "text",
+        type: 'text',
         text: `${name}-payload`,
         metadata: null,
       },
@@ -64,12 +64,10 @@ class ControllableBackgroundAgent extends BackgroundTaskAgent {
   >();
 
   constructor(options: BackgroundTaskAgentOptions<BaseAgentState> = {}) {
-    super("controllable-agent", options);
+    super('controllable-agent', options);
   }
 
-  protected override async runBackgroundTask(
-    params: TaskSendParams,
-  ): Promise<unknown> {
+  protected override async runBackgroundTask(params: TaskSendParams): Promise<unknown> {
     return await new Promise<unknown>((resolve, reject) => {
       this.pending.set(params.id, { resolve, reject });
     });
@@ -92,7 +90,7 @@ class ControllableBackgroundAgent extends BackgroundTaskAgent {
   }
 }
 
-describe("BackgroundTaskAgent", () => {
+describe('BackgroundTaskAgent', () => {
   beforeEach(() => {
     jest.useFakeTimers();
   });
@@ -102,9 +100,9 @@ describe("BackgroundTaskAgent", () => {
     jest.useRealTimers();
   });
 
-  test("streams working, artifact, and completed events", async () => {
+  test('streams working, artifact, and completed events', async () => {
     const agent = new ControllableBackgroundAgent();
-    const params = createSendParams("task-1", "start");
+    const params = createSendParams('task-1', 'start');
 
     const task = await agent.startTask(params);
     expect(task.status.state).toBe(TaskState.WORKING);
@@ -115,13 +113,13 @@ describe("BackgroundTaskAgent", () => {
     const firstEvent = (await iterator.next()).value as TaskStatusUpdateEvent;
     expect(firstEvent.status.state).toBe(TaskState.WORKING);
 
-    await agent.updateTaskArtifact(params.id, createArtifact("artifact-1"));
+    await agent.updateTaskArtifact(params.id, createArtifact('artifact-1'));
     const artifactEvent = await iterator.next();
     expect(artifactEvent.value).toBeDefined();
-    if (!artifactEvent.value || !("artifact" in artifactEvent.value)) {
-      throw new Error("Expected artifact event");
+    if (!artifactEvent.value || !('artifact' in artifactEvent.value)) {
+      throw new Error('Expected artifact event');
     }
-    expect(artifactEvent.value.artifact?.name).toBe("artifact-1");
+    expect(artifactEvent.value.artifact?.name).toBe('artifact-1');
 
     agent.resolveTask(params.id, { result: true });
     const finalEvent = (await iterator.next()).value as TaskStatusUpdateEvent;
@@ -137,16 +135,15 @@ describe("BackgroundTaskAgent", () => {
     await agent.unsubscribeTask({ id: params.id, metadata: null });
     const lateStream = await agent.subscribeToTaskUpdates(params);
     const lateIterator = lateStream[Symbol.asyncIterator]();
-    const lateEvent = (await lateIterator.next())
-      .value as TaskStatusUpdateEvent;
+    const lateEvent = (await lateIterator.next()).value as TaskStatusUpdateEvent;
     expect(lateEvent.status.state).toBe(TaskState.COMPLETED);
     const lateDone = await lateIterator.next();
     expect(lateDone.done).toBe(true);
   });
 
-  test("records failures and includes error message", async () => {
+  test('records failures and includes error message', async () => {
     const agent = new ControllableBackgroundAgent();
-    const params = createSendParams("task-2", "start");
+    const params = createSendParams('task-2', 'start');
 
     await agent.startTask(params);
     const stream = await agent.subscribeToTaskUpdates(params);
@@ -154,7 +151,7 @@ describe("BackgroundTaskAgent", () => {
 
     await iterator.next(); // working
 
-    agent.rejectTask(params.id, new Error("boom"));
+    agent.rejectTask(params.id, new Error('boom'));
     const failureEvent = (await iterator.next()).value as TaskStatusUpdateEvent;
     expect(failureEvent.status.state).toBe(TaskState.FAILED);
     expect(failureEvent.status.message).not.toBeNull();
@@ -164,16 +161,13 @@ describe("BackgroundTaskAgent", () => {
     const status = await agent.getTaskStatus({ id: params.id });
     expect(status.status.state).toBe(TaskState.FAILED);
 
-    const secondUpdate = await agent.updateTaskState(
-      params.id,
-      TaskState.WORKING,
-    );
+    const secondUpdate = await agent.updateTaskState(params.id, TaskState.WORKING);
     expect(secondUpdate).toBe(false);
   });
 
-  test("cancels stalled tasks after max lifetime", async () => {
+  test('cancels stalled tasks after max lifetime', async () => {
     const agent = new ControllableBackgroundAgent({ maxTaskLifetimeMs: 500 });
-    const params = createSendParams("task-3", "start");
+    const params = createSendParams('task-3', 'start');
 
     await agent.startTask(params);
     const stream = await agent.subscribeToTaskUpdates(params);
@@ -183,11 +177,10 @@ describe("BackgroundTaskAgent", () => {
     const nextEventPromise = iterator.next();
 
     await jest.advanceTimersByTimeAsync(500);
-    const canceledEvent = (await nextEventPromise)
-      .value as TaskStatusUpdateEvent;
+    const canceledEvent = (await nextEventPromise).value as TaskStatusUpdateEvent;
     expect(canceledEvent.status.state).toBe(TaskState.CANCELED);
 
-    agent.resolveTask(params.id, "ignored");
+    agent.resolveTask(params.id, 'ignored');
     await jest.advanceTimersByTimeAsync(1000);
 
     expect((await iterator.next()).done).toBe(true);
@@ -198,20 +191,19 @@ describe("BackgroundTaskAgent", () => {
     expect(canceledTask.status.state).toBe(TaskState.CANCELED);
   });
 
-  test("completed tasks remain in cache until TTL expires", async () => {
+  test('completed tasks remain in cache until TTL expires', async () => {
     const agent = new ControllableBackgroundAgent({
       completedCacheTtlSec: 0.1,
     });
-    const params = createSendParams("task-4", "start");
+    const params = createSendParams('task-4', 'start');
 
     await agent.startTask(params);
     const stream = await agent.subscribeToTaskUpdates(params);
     const iterator = stream[Symbol.asyncIterator]();
     await iterator.next(); // working
 
-    agent.resolveTask(params.id, "done");
-    const completionEvent = (await iterator.next())
-      .value as TaskStatusUpdateEvent;
+    agent.resolveTask(params.id, 'done');
+    const completionEvent = (await iterator.next()).value as TaskStatusUpdateEvent;
     expect(completionEvent.status.state).toBe(TaskState.COMPLETED);
     const completionDone = await iterator.next();
     expect(completionDone.done).toBe(true);
@@ -221,8 +213,6 @@ describe("BackgroundTaskAgent", () => {
 
     await jest.advanceTimersByTimeAsync(200); // TTL elapsed
 
-    await expect(agent.getTaskStatus({ id: params.id })).rejects.toThrow(
-      /Unknown or expired task/,
-    );
+    await expect(agent.getTaskStatus({ id: params.id })).rejects.toThrow(/Unknown or expired task/);
   });
 });

@@ -7,7 +7,7 @@ import {
   type FameDeliveryContext,
   type FameEnvelope,
   type FameMessageResponse,
-} from "naylence-core";
+} from 'naylence-core';
 import {
   AsyncLock,
   FameAddress,
@@ -16,9 +16,14 @@ import {
   getLogger,
   type KeyValueStore,
   type StorageProvider,
-} from "naylence-runtime";
+} from 'naylence-runtime';
 
-import { Agent, type Payload } from "./agent.js";
+import {
+  Agent,
+  type BaseAgentConstructor,
+  type Payload,
+  registerBaseAgentConstructor,
+} from './agent.js';
 import {
   type AgentCard,
   Task,
@@ -30,17 +35,17 @@ import {
   TaskState,
   TaskStatusUpdateEvent,
   TaskStatusUpdateEventSchema,
-} from "./a2a-types.js";
-import { TERMINAL_TASK_STATES } from "./task-states.js";
+} from './a2a-types.js';
+import { TERMINAL_TASK_STATES } from './task-states.js';
 import {
   PushNotificationNotSupportedException,
   TaskNotCancelableException,
   UnsupportedOperationException,
-} from "./errors.js";
-import { decodeFameDataPayload, makeTask } from "./util.js";
-import { handleAgentRpcRequest } from "./rpc-adapter.js";
+} from './errors.js';
+import { decodeFameDataPayload, makeTask } from './util.js';
+import { handleAgentRpcRequest } from './rpc-adapter.js';
 
-const logger = getLogger("naylence.agent.base-agent");
+const logger = getLogger('naylence.agent.base-agent');
 
 export { TERMINAL_TASK_STATES };
 
@@ -60,7 +65,7 @@ class StateContext<StateT extends BaseAgentState> {
   constructor(
     private readonly acquireLock: () => Promise<() => void>,
     private readonly loadState: () => Promise<StateT>,
-    private readonly saveState: (state: StateT) => Promise<void>,
+    private readonly saveState: (state: StateT) => Promise<void>
   ) {}
 
   async enter(): Promise<StateT> {
@@ -110,7 +115,7 @@ export class BaseAgentState {
 
   protected getAgent(): BaseAgent<BaseAgentState> {
     if (!this.agent) {
-      throw new Error("State is not associated with an agent");
+      throw new Error('State is not associated with an agent');
     }
     return this.agent;
   }
@@ -133,31 +138,29 @@ export interface BaseAgentOptions<StateT extends BaseAgentState> {
 
 function camelToSnakeCase(name: string): string {
   return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/([A-Z])([A-Z][a-z])/g, "$1_$2")
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1_$2')
     .toLowerCase();
 }
 
 function sanitizeNamespace(ns: string): string {
-  const replaced = ns
-    .replace(/[^A-Za-z0-9._-]+/g, "_")
-    .replace(/^[._-]+|[._-]+$/g, "");
-  const safe = replaced.length > 0 ? replaced : "ns";
+  const replaced = ns.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[._-]+|[._-]+$/g, '');
+  const safe = replaced.length > 0 ? replaced : 'ns';
   return safe.slice(0, 120);
 }
 
 async function delay(ms: number): Promise<void> {
   await new Promise((resolve) => {
     const timeout = globalThis.setTimeout;
-    if (typeof timeout !== "function") {
-      throw new Error("setTimeout is not available in the current environment");
+    if (typeof timeout !== 'function') {
+      throw new Error('setTimeout is not available in the current environment');
     }
     timeout(resolve, ms);
   });
 }
 
-function resolveRpcParams(params: JsonRpcRequest["params"]): JsonRpcParams {
-  if (params && typeof params === "object") {
+function resolveRpcParams(params: JsonRpcRequest['params']): JsonRpcParams {
+  if (params && typeof params === 'object') {
     return params as JsonRpcParams;
   }
   return {};
@@ -165,18 +168,16 @@ function resolveRpcParams(params: JsonRpcRequest["params"]): JsonRpcParams {
 
 function resolveReplyTarget(
   explicit: string | FameAddress | null | undefined,
-  params: JsonRpcParams,
+  params: JsonRpcParams
 ): string | FameAddress | null {
   const fromParams =
-    (params["reply_to"] as string | FameAddress | null | undefined) ??
-    (params["replyTo"] as string | FameAddress | null | undefined);
+    (params['reply_to'] as string | FameAddress | null | undefined) ??
+    (params['replyTo'] as string | FameAddress | null | undefined);
   const resolved = explicit ?? fromParams ?? null;
   return resolved === undefined ? null : resolved;
 }
 
-export class BaseAgent<
-  StateT extends BaseAgentState = BaseAgentState,
-> extends Agent {
+export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends Agent {
   static STATE_MODEL: StateModelCtor<BaseAgentState> | null = null;
 
   private _name: string | null;
@@ -192,19 +193,15 @@ export class BaseAgent<
   private _stateStore: KeyValueStore<StateT> | null = null;
   private _stateCache: StateT | null = null;
 
-  constructor(
-    name: string | null = null,
-    options: BaseAgentOptions<StateT> = {},
-  ) {
+  constructor(name: string | null = null, options: BaseAgentOptions<StateT> = {}) {
     super();
     this._name = name ?? camelToSnakeCase(this.constructor.name);
     this._storageProvider = options.storageProvider ?? null;
     this._stateModel =
       options.stateModel ??
-      ((this.constructor as typeof BaseAgent)
-        .STATE_MODEL as StateModelCtor<StateT> | null);
+      ((this.constructor as typeof BaseAgent).STATE_MODEL as StateModelCtor<StateT> | null);
     this._stateNamespaceRaw = options.stateNamespace ?? null;
-    this._stateKey = options.stateKey ?? "state";
+    this._stateKey = options.stateKey ?? 'state';
     this._stateFactory = options.stateFactory ?? null;
   }
 
@@ -233,7 +230,7 @@ export class BaseAgent<
   get storageProvider(): StorageProvider {
     if (!this._storageProvider) {
       throw new Error(
-        "Storage provider is not available. Supply one via BaseAgent options or override BaseAgent.storageProvider.",
+        'Storage provider is not available. Supply one via BaseAgent options or override BaseAgent.storageProvider.'
       );
     }
 
@@ -266,7 +263,7 @@ export class BaseAgent<
       released = true;
       releaseResolve();
       void guard.catch((error) => {
-        logger.error("state_lock_release_failed", { error });
+        logger.error('state_lock_release_failed', { error });
       });
     };
   }
@@ -276,24 +273,21 @@ export class BaseAgent<
       return this._stateModel;
     }
     throw new Error(
-      "No state model configured. Provide via Generic, STATE_MODEL, constructor 'stateModel', or 'stateFactory'.",
+      "No state model configured. Provide via Generic, STATE_MODEL, constructor 'stateModel', or 'stateFactory'."
     );
   }
 
-  private async ensureStateStore(
-    modelType: StateModelCtor<StateT>,
-  ): Promise<void> {
+  private async ensureStateStore(modelType: StateModelCtor<StateT>): Promise<void> {
     if (this._stateStore) {
       return;
     }
 
     const provider = this.storageProvider;
     if (!provider) {
-      throw new Error("Storage provider is not available");
+      throw new Error('Storage provider is not available');
     }
 
-    const namespaceRaw =
-      this._stateNamespaceRaw ?? this.defaultStateNamespace();
+    const namespaceRaw = this._stateNamespaceRaw ?? this.defaultStateNamespace();
     const namespace = sanitizeNamespace(namespaceRaw);
     this._stateStore = await provider.getKeyValueStore(modelType, namespace);
   }
@@ -301,17 +295,15 @@ export class BaseAgent<
   private defaultStateNamespace(): string {
     if (!this._name) {
       throw new Error(
-        "Cannot derive default state namespace without agent name. Set 'name' or provide 'stateNamespace'.",
+        "Cannot derive default state namespace without agent name. Set 'name' or provide 'stateNamespace'."
       );
     }
     return `__agent_${this._name}`;
   }
 
   private attachAgent(state: StateT): void {
-    if (typeof (state as BaseAgentState).attachAgent === "function") {
-      (state as BaseAgentState).attachAgent(
-        this as unknown as BaseAgent<BaseAgentState>,
-      );
+    if (typeof (state as BaseAgentState).attachAgent === 'function') {
+      (state as BaseAgentState).attachAgent(this as unknown as BaseAgent<BaseAgentState>);
     }
   }
 
@@ -347,12 +339,12 @@ export class BaseAgent<
 
   get state(): StateContext<StateT> {
     if (!this._stateModel && !this._stateFactory) {
-      throw new Error("No state model configured");
+      throw new Error('No state model configured');
     }
     return new StateContext<StateT>(
       () => this.acquireStateLock(),
       () => this.loadStateInternal(),
-      (state) => this.saveStateInternal(state),
+      (state) => this.saveStateInternal(state)
     );
   }
 
@@ -382,23 +374,17 @@ export class BaseAgent<
   }
 
   private static isRpcRequest(payload: unknown): payload is JsonRpcRequest {
-    if (!payload || typeof payload !== "object") {
+    if (!payload || typeof payload !== 'object') {
       return false;
     }
 
     const candidate = payload as Record<string, unknown>;
-    if (
-      typeof candidate.jsonrpc !== "string" ||
-      typeof candidate.method !== "string"
-    ) {
+    if (typeof candidate.jsonrpc !== 'string' || typeof candidate.method !== 'string') {
       return false;
     }
 
     const { params } = candidate;
-    if (
-      params !== undefined &&
-      (typeof params !== "object" || params === null)
-    ) {
+    if (params !== undefined && (typeof params !== 'object' || params === null)) {
       return false;
     }
 
@@ -407,12 +393,12 @@ export class BaseAgent<
 
   async handleMessage(
     envelope: FameEnvelope,
-    _context?: FameDeliveryContext,
+    _context?: FameDeliveryContext
   ): Promise<FameMessageResponse | AsyncIterable<FameMessageResponse> | null> {
     void _context;
     const frame = envelope.frame;
 
-    if ((frame as DeliveryAckFrame).type === "DeliveryAck") {
+    if ((frame as DeliveryAckFrame).type === 'DeliveryAck') {
       const ack = frame as DeliveryAckFrame;
       if (!ack.ok && envelope.corrId) {
         const subscription = this._subscriptions.get(envelope.corrId);
@@ -423,11 +409,9 @@ export class BaseAgent<
       return null;
     }
 
-    if ((frame as DataFrame).type !== "Data") {
+    if ((frame as DataFrame).type !== 'Data') {
       const frameType = (frame as { type?: unknown }).type ?? typeof frame;
-      throw new Error(
-        `Invalid envelope frame. Expected DataFrame, actual: ${String(frameType)}`,
-      );
+      throw new Error(`Invalid envelope frame. Expected DataFrame, actual: ${String(frameType)}`);
     }
 
     const decoded = decodeFameDataPayload(frame as DataFrame);
@@ -440,15 +424,15 @@ export class BaseAgent<
   }
 
   async onMessage(message: unknown): Promise<FameMessageResponse | null> {
-    logger.warning("unhandled_inbound_message", { message });
+    logger.warning('unhandled_inbound_message', { message });
     return null;
   }
 
   private async handleRpcMessage(
     rpcRequest: JsonRpcRequest,
-    envelope: FameEnvelope,
+    envelope: FameEnvelope
   ): Promise<FameMessageResponse | AsyncIterable<FameMessageResponse> | null> {
-    if (rpcRequest.method === "tasks/sendSubscribe") {
+    if (rpcRequest.method === 'tasks/sendSubscribe') {
       this.startSubscriptionTask(rpcRequest, envelope.replyTo ?? null);
       return null;
     }
@@ -456,29 +440,31 @@ export class BaseAgent<
     const params = resolveRpcParams(rpcRequest.params);
     const replyTo = resolveReplyTarget(envelope.replyTo, params);
     if (!replyTo) {
-      logger.warning("missing_reply_to", { rpcMethod: rpcRequest.method });
+      logger.warning('missing_reply_to', { rpcMethod: rpcRequest.method });
       return null;
     }
 
-    const traceId = envelope.traceId ?? undefined;
+    const traceId = envelope.traceId ?? null;
 
     const generator = async function* (
-      this: BaseAgent<StateT>,
+      this: BaseAgent<StateT>
     ): AsyncGenerator<FameMessageResponse> {
-      for await (const rpcResponse of handleAgentRpcRequest(
-        this as Agent,
-        rpcRequest,
-      )) {
+      for await (const rpcResponse of handleAgentRpcRequest(this as Agent, rpcRequest)) {
         const frame: DataFrame = {
-          type: "Data",
+          type: 'Data',
           payload: rpcResponse,
         };
-        const envelopeResponse = createFameEnvelope({
+        const envelopeOptions: Parameters<typeof createFameEnvelope>[0] = {
           frame,
           to: replyTo,
-          traceId,
-          corrId: rpcRequest.id,
-        });
+        };
+        if (traceId !== null) {
+          envelopeOptions.traceId = traceId;
+        }
+        if (rpcRequest.id != null) {
+          envelopeOptions.corrId = String(rpcRequest.id);
+        }
+        const envelopeResponse = createFameEnvelope(envelopeOptions);
         yield createMessageResponse(envelopeResponse);
       }
     }.bind(this);
@@ -488,22 +474,18 @@ export class BaseAgent<
 
   private startSubscriptionTask(
     rpcRequest: JsonRpcRequest,
-    replyTo: string | FameAddress | null,
+    replyTo: string | FameAddress | null
   ): void {
     const id = rpcRequest.id != null ? String(rpcRequest.id) : null;
     if (!id) {
-      logger.warning("subscribe_missing_id", {});
+      logger.warning('subscribe_missing_id', {});
     }
 
     const abortController = new AbortController();
-    const taskPromise = this.streamSendSubscribe(
-      rpcRequest,
-      replyTo,
-      abortController.signal,
-    )
+    const taskPromise = this.streamSendSubscribe(rpcRequest, replyTo, abortController.signal)
       .catch((error) => {
         if (!abortController.signal.aborted) {
-          logger.error("send_subscribe_stream_failed", { error });
+          logger.error('send_subscribe_stream_failed', { error });
         }
       })
       .finally(() => {
@@ -523,42 +505,41 @@ export class BaseAgent<
   private async streamSendSubscribe(
     rpcRequest: JsonRpcRequest,
     replyTo: string | FameAddress | null,
-    signal: AbortSignal,
+    signal: AbortSignal
   ): Promise<void> {
     try {
       const params = resolveRpcParams(rpcRequest.params);
-      for await (const rpcResponse of handleAgentRpcRequest(
-        this as Agent,
-        rpcRequest,
-      )) {
+      for await (const rpcResponse of handleAgentRpcRequest(this as Agent, rpcRequest)) {
         if (signal.aborted) {
           break;
         }
 
         const target = resolveReplyTarget(replyTo, params);
         if (!target) {
-          logger.warning("missing_reply_to_in_stream", {
+          logger.warning('missing_reply_to_in_stream', {
             rpcId: rpcRequest.id,
           });
           return;
         }
 
-        const fameTarget =
-          typeof target === "string" ? new FameAddress(target) : target;
+        const fameTarget = typeof target === 'string' ? new FameAddress(target) : target;
         const frame: DataFrame = {
-          type: "Data",
+          type: 'Data',
           payload: rpcResponse,
         };
-        const envelope = createFameEnvelope({
+        const envelopeOptions: Parameters<typeof createFameEnvelope>[0] = {
           frame,
           to: fameTarget,
-          corrId: rpcRequest.id,
-        });
+        };
+        if (rpcRequest.id != null) {
+          envelopeOptions.corrId = String(rpcRequest.id);
+        }
+        const envelope = createFameEnvelope(envelopeOptions);
         await FameFabric.current().send(envelope);
       }
     } catch (error) {
       if (!signal.aborted) {
-        logger.error("send_subscribe_stream_error", { error });
+        logger.error('send_subscribe_stream_error', { error });
         throw error;
       }
     }
@@ -570,21 +551,19 @@ export class BaseAgent<
   }
 
   async registerPushEndpoint(
-    _config: TaskPushNotificationConfig,
+    _config: TaskPushNotificationConfig
   ): Promise<TaskPushNotificationConfig> {
     void _config;
     throw new PushNotificationNotSupportedException();
   }
 
-  async getPushNotificationConfig(
-    _params: TaskIdParams,
-  ): Promise<TaskPushNotificationConfig> {
+  async getPushNotificationConfig(_params: TaskIdParams): Promise<TaskPushNotificationConfig> {
     void _params;
     throw new PushNotificationNotSupportedException();
   }
 
   async *subscribeToTaskUpdates(
-    params: TaskSendParams,
+    params: TaskSendParams
   ): AsyncIterable<TaskStatusUpdateEvent | TaskArtifactUpdateEvent> {
     let lastState: TaskState | null = null;
     while (true) {
@@ -615,9 +594,9 @@ export class BaseAgent<
 
   async unsubscribeTask(_params: TaskIdParams): Promise<unknown> {
     void _params;
-      throw new UnsupportedOperationException(
-        `Agent ${this.constructor.name} does not support operation 'unsubscribeTask'`,
-      );
+    throw new UnsupportedOperationException(
+      `Agent ${this.constructor.name} does not support operation 'unsubscribeTask'`
+    );
   }
 
   async cancelTask(_params: TaskIdParams): Promise<Task> {
@@ -627,14 +606,14 @@ export class BaseAgent<
 
   async getAgentCard(): Promise<AgentCard> {
     throw new UnsupportedOperationException(
-      `Agent ${this.constructor.name} does not support operation 'getAgentCard'`,
+      `Agent ${this.constructor.name} does not support operation 'getAgentCard'`
     );
   }
 
   async getTaskStatus(_params: TaskQueryParams): Promise<Task> {
     void _params;
     throw new UnsupportedOperationException(
-      `Agent ${this.constructor.name} does not support operation 'getTaskStatus'`,
+      `Agent ${this.constructor.name} does not support operation 'getTaskStatus'`
     );
   }
 
@@ -642,7 +621,7 @@ export class BaseAgent<
     void _payload;
     void _id;
     throw new UnsupportedOperationException(
-      `Agent ${this.constructor.name} does not support operation 'runTask'`,
+      `Agent ${this.constructor.name} does not support operation 'runTask'`
     );
   }
 
@@ -653,40 +632,37 @@ export class BaseAgent<
     let payload: Payload = null;
     if (parts.length > 0) {
       const first = parts[0];
-      if (first.type === "text") {
+      if (first.type === 'text') {
         payload = first.text ?? null;
-      } else if (first.type === "data") {
+      } else if (first.type === 'data') {
         payload = first.data ?? null;
       }
     }
 
     const hasCustomRun =
-      Object.prototype.hasOwnProperty.call(ctor.prototype, "runTask") &&
+      Object.prototype.hasOwnProperty.call(ctor.prototype, 'runTask') &&
       ctor.prototype.runTask !== BaseAgent.prototype.runTask;
 
     if (hasCustomRun) {
-      return await this.#createTaskFromPayloadResponse(params, payload, (
-        p,
-        id,
-      ) => this.runTask(p, id));
+      return await this.#createTaskFromPayloadResponse(params, payload, (p, id) =>
+        this.runTask(p, id)
+      );
     }
 
-    throw new Error(
-      `${ctor.name} must implement at least one of: startTask() or runTask()`,
-    );
+    throw new Error(`${ctor.name} must implement at least one of: startTask() or runTask()`);
   }
 
   async #createTaskFromPayloadResponse(
     params: TaskSendParams,
     payload: Payload,
-    runner: (payload: Payload, id: string | null) => Promise<unknown>,
+    runner: (payload: Payload, id: string | null) => Promise<unknown>
   ): Promise<Task> {
     const responsePayload = await runner(payload, params.id ?? null);
     let sanitizedPayload: Payload = null;
 
-    if (typeof responsePayload === "string") {
+    if (typeof responsePayload === 'string') {
       sanitizedPayload = responsePayload;
-    } else if (responsePayload && typeof responsePayload === "object") {
+    } else if (responsePayload && typeof responsePayload === 'object') {
       sanitizedPayload = responsePayload as Record<string, unknown>;
     }
 
@@ -700,7 +676,7 @@ export class BaseAgent<
 
   async aserve(
     address: FameAddress | string,
-    options: Parameters<Agent["aserve"]>[1] = {},
+    options: Parameters<Agent['aserve']>[1] = {}
   ): Promise<void> {
     if (!this._name) {
       this._name = generateId();
@@ -708,3 +684,5 @@ export class BaseAgent<
     await super.aserve(address, options);
   }
 }
+
+registerBaseAgentConstructor(BaseAgent as BaseAgentConstructor);

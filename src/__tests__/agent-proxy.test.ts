@@ -1,14 +1,14 @@
-import { jest } from "@jest/globals";
-import { FameAddress, type FameFabric } from "naylence-runtime";
-import { AgentProxy } from "../naylence/agent/agent-proxy.js";
+import { jest } from '@jest/globals';
+import { FameAddress, type FameFabric } from 'naylence-runtime';
+import { AgentProxy } from '../naylence/agent/agent-proxy.js';
 import {
   TaskState,
   type TaskSendParams,
   type Task,
   type TaskStatusUpdateEvent,
   type TaskArtifactUpdateEvent,
-} from "../naylence/agent/a2a-types.js";
-import { makeTaskParams } from "../naylence/agent/util.js";
+} from '../naylence/agent/a2a-types.js';
+import { makeTaskParams } from '../naylence/agent/util.js';
 
 type InvokeFn = (...args: any[]) => Promise<any>;
 type InvokeStreamFn = (...args: any[]) => Promise<AsyncIterable<any>>;
@@ -29,7 +29,9 @@ function createFabric(): { fabric: FameFabric; mocks: FabricMocks } {
     invoke: jest.fn(async () => ({})) as jest.MockedFunction<InvokeFn>,
     invokeByCapability: jest.fn(async () => ({})) as jest.MockedFunction<InvokeFn>,
     invokeStream: jest.fn(async () => asyncIterable()) as jest.MockedFunction<InvokeStreamFn>,
-    invokeByCapabilityStream: jest.fn(async () => asyncIterable()) as jest.MockedFunction<InvokeStreamFn>,
+    invokeByCapabilityStream: jest.fn(async () =>
+      asyncIterable()
+    ) as jest.MockedFunction<InvokeStreamFn>,
   } satisfies FabricMocks;
 
   const fabric = mocks as unknown as FameFabric;
@@ -39,16 +41,23 @@ function createFabric(): { fabric: FameFabric; mocks: FabricMocks } {
 function createTask(options: {
   id: string;
   state: TaskState;
-  message?: { parts: Array<{ type: "text" | "data"; text?: string | null; data?: Record<string, unknown> | null }>; role?: "user" | "agent" } | null;
+  message?: {
+    parts: Array<{
+      type: 'text' | 'data';
+      text?: string | null;
+      data?: Record<string, unknown> | null;
+    }>;
+    role?: 'user' | 'agent';
+  } | null;
 }): Task {
   const { id, state, message = null } = options;
   const normalizedMessage = message
     ? {
-        role: message.role ?? "agent",
+        role: message.role ?? 'agent',
         parts: message.parts.map((part) =>
-          part.type === "text"
-            ? { type: "text", text: part.text ?? null, metadata: null }
-            : { type: "data", data: part.data ?? {}, metadata: null }
+          part.type === 'text'
+            ? { type: 'text', text: part.text ?? null, metadata: null }
+            : { type: 'data', data: part.data ?? {}, metadata: null }
         ),
         metadata: null,
       }
@@ -68,22 +77,22 @@ function createTask(options: {
   } as Task;
 }
 
-describe("AgentProxy", () => {
+describe('AgentProxy', () => {
   afterEach(() => {
     jest.restoreAllMocks();
     jest.useRealTimers();
   });
 
-  it("startTask delegates to address-bound fabric", async () => {
+  it('startTask delegates to address-bound fabric', async () => {
     const { fabric, mocks } = createFabric();
     const proxy = new AgentProxy({
-      address: new FameAddress("alpha@test"),
+      address: new FameAddress('alpha@test'),
       fabric,
     });
 
-    const params = makeTaskParams({ id: "task-1", payload: "hello" });
+    const params = makeTaskParams({ id: 'task-1', payload: 'hello' });
     (mocks.invoke as jest.Mock).mockImplementation(async () =>
-      createTask({ id: "task-2", state: TaskState.COMPLETED })
+      createTask({ id: 'task-2', state: TaskState.COMPLETED })
     );
 
     const result = await proxy.startTask(params);
@@ -91,69 +100,69 @@ describe("AgentProxy", () => {
     expect(result.status.state).toBe(TaskState.COMPLETED);
     expect(mocks.invoke).toHaveBeenCalledWith(
       expect.any(FameAddress),
-      "tasks/send",
-      expect.objectContaining({ id: "task-1" })
+      'tasks/send',
+      expect.objectContaining({ id: 'task-1' })
     );
   });
 
-  it("startTask convenience overload routes via capabilities", async () => {
+  it('startTask convenience overload routes via capabilities', async () => {
     const { fabric, mocks } = createFabric();
     const proxy = new AgentProxy({
-      capabilities: ["nlp"],
+      capabilities: ['nlp'],
       fabric,
     });
 
     (mocks.invokeByCapability as jest.Mock).mockImplementation(async () =>
-      createTask({ id: "task-2", state: TaskState.COMPLETED })
+      createTask({ id: 'task-2', state: TaskState.COMPLETED })
     );
 
     const result = await proxy.startTask({
-      id: "task-2",
-      payload: { topic: "test" },
+      id: 'task-2',
+      payload: { topic: 'test' },
     });
 
-    expect(result.id).toBe("task-2");
+    expect(result.id).toBe('task-2');
     expect(mocks.invokeByCapability).toHaveBeenCalledWith(
-      ["nlp"],
-      "tasks/send",
-      expect.objectContaining({ id: "task-2" })
+      ['nlp'],
+      'tasks/send',
+      expect.objectContaining({ id: 'task-2' })
     );
   });
 
-  it("runTask returns first text part when task already terminal", async () => {
+  it('runTask returns first text part when task already terminal', async () => {
     const { fabric, mocks } = createFabric();
-    const proxy = new AgentProxy({ address: new FameAddress("beta@test"), fabric });
+    const proxy = new AgentProxy({ address: new FameAddress('beta@test'), fabric });
 
     (mocks.invoke as jest.Mock).mockImplementation(async (...args: unknown[]) => {
       const method = args[1] as string;
-      if (method === "tasks/send") {
+      if (method === 'tasks/send') {
         return createTask({
-          id: "task-3",
+          id: 'task-3',
           state: TaskState.COMPLETED,
           message: {
-            parts: [{ type: "text", text: "done" }],
+            parts: [{ type: 'text', text: 'done' }],
           },
         });
       }
       throw new Error(`Unexpected method ${method}`);
     });
 
-    const result = await proxy.runTask("input", null);
-    expect(result).toBe("done");
+    const result = await proxy.runTask('input', null);
+    expect(result).toBe('done');
     expect(mocks.invokeStream).not.toHaveBeenCalled();
   });
 
-  it("runTask consumes streaming updates until terminal status", async () => {
+  it('runTask consumes streaming updates until terminal status', async () => {
     const { fabric, mocks } = createFabric();
-    const proxy = new AgentProxy({ address: new FameAddress("gamma@test"), fabric });
+    const proxy = new AgentProxy({ address: new FameAddress('gamma@test'), fabric });
 
     let unsubscribeCalls = 0;
     (mocks.invoke as jest.Mock).mockImplementation(async (...args: unknown[]) => {
       const method = args[1] as string;
-      if (method === "tasks/send") {
-        return createTask({ id: "task-4", state: TaskState.WORKING });
+      if (method === 'tasks/send') {
+        return createTask({ id: 'task-4', state: TaskState.WORKING });
       }
-      if (method === "tasks/sendUnsubscribe") {
+      if (method === 'tasks/sendUnsubscribe') {
         unsubscribeCalls += 1;
         return null;
       }
@@ -161,12 +170,12 @@ describe("AgentProxy", () => {
     });
 
     const statusEvent: TaskStatusUpdateEvent = {
-      id: "task-4",
+      id: 'task-4',
       status: {
         state: TaskState.COMPLETED,
         message: {
-          role: "agent",
-          parts: [{ type: "text", text: "streamed" }],
+          role: 'agent',
+          parts: [{ type: 'text', text: 'streamed' }],
           metadata: null,
         },
         timestamp: new Date(),
@@ -182,32 +191,32 @@ describe("AgentProxy", () => {
     );
 
     const result = await proxy.runTask({ streamed: true }, null);
-    expect(result).toEqual("streamed");
+    expect(result).toEqual('streamed');
     expect(unsubscribeCalls).toBe(1);
   });
 
-  it("runTask raises error when final status failed", async () => {
+  it('runTask raises error when final status failed', async () => {
     const { fabric, mocks } = createFabric();
-    const proxy = new AgentProxy({ address: new FameAddress("delta@test"), fabric });
+    const proxy = new AgentProxy({ address: new FameAddress('delta@test'), fabric });
 
     (mocks.invoke as jest.Mock).mockImplementation(async (...args: unknown[]) => {
       const method = args[1] as string;
-      if (method === "tasks/send") {
-        return createTask({ id: "task-5", state: TaskState.WORKING });
+      if (method === 'tasks/send') {
+        return createTask({ id: 'task-5', state: TaskState.WORKING });
       }
-      if (method === "tasks/sendUnsubscribe") {
+      if (method === 'tasks/sendUnsubscribe') {
         return null;
       }
       throw new Error(`Unexpected method ${method}`);
     });
 
     const failureEvent: TaskStatusUpdateEvent = {
-      id: "task-5",
+      id: 'task-5',
       status: {
         state: TaskState.FAILED,
         message: {
-          role: "agent",
-          parts: [{ type: "text", text: "boom" }],
+          role: 'agent',
+          parts: [{ type: 'text', text: 'boom' }],
           metadata: null,
         },
         timestamp: new Date(),
@@ -225,30 +234,30 @@ describe("AgentProxy", () => {
     await expect(proxy.runTask(null, null)).rejects.toThrow(/boom/);
   });
 
-  it("subscribeToTaskUpdates yields artifact and status events", async () => {
+  it('subscribeToTaskUpdates yields artifact and status events', async () => {
     const { fabric, mocks } = createFabric();
-    const proxy = new AgentProxy({ address: new FameAddress("epsilon@test"), fabric });
+    const proxy = new AgentProxy({ address: new FameAddress('epsilon@test'), fabric });
 
     (mocks.invoke as jest.Mock).mockImplementation(async (...args: unknown[]) => {
       const method = args[1] as string;
-      if (method === "tasks/sendUnsubscribe") {
+      if (method === 'tasks/sendUnsubscribe') {
         return null;
       }
-      if (method === "tasks/send") {
-        return createTask({ id: "task-6", state: TaskState.WORKING });
+      if (method === 'tasks/send') {
+        return createTask({ id: 'task-6', state: TaskState.WORKING });
       }
       throw new Error(`Unexpected method ${method}`);
     });
 
     const artifactEvent: TaskArtifactUpdateEvent = {
-      id: "task-6",
+      id: 'task-6',
       artifact: {
-        name: "file",
+        name: 'file',
         description: null,
         parts: [
           {
-            type: "text",
-            text: "content",
+            type: 'text',
+            text: 'content',
             metadata: null,
           },
         ],
@@ -261,7 +270,7 @@ describe("AgentProxy", () => {
     };
 
     const statusEvent: TaskStatusUpdateEvent = {
-      id: "task-6",
+      id: 'task-6',
       status: {
         state: TaskState.COMPLETED,
         message: null,
@@ -279,59 +288,59 @@ describe("AgentProxy", () => {
     );
 
     const updates = await proxy.subscribeToTaskUpdates(
-      makeTaskParams({ id: "task-6", payload: "start" })
+      makeTaskParams({ id: 'task-6', payload: 'start' })
     );
 
     const collected: Array<TaskStatusUpdateEvent | TaskArtifactUpdateEvent> = [];
     for await (const item of updates) {
       collected.push(item);
-      if ("status" in item && item.status.state === TaskState.COMPLETED) {
+      if ('status' in item && item.status.state === TaskState.COMPLETED) {
         break;
       }
     }
 
     expect(collected).toHaveLength(2);
-    expect(collected[0]).toHaveProperty("artifact");
-    expect(collected[1]).toHaveProperty("status");
+    expect(collected[0]).toHaveProperty('artifact');
+    expect(collected[1]).toHaveProperty('status');
     expect(mocks.invoke).toHaveBeenCalledWith(
       expect.any(FameAddress),
-      "tasks/sendUnsubscribe",
-      expect.objectContaining({ id: "task-6" })
+      'tasks/sendUnsubscribe',
+      expect.objectContaining({ id: 'task-6' })
     );
   });
 
-  it("requires exactly one routing hint", () => {
+  it('requires exactly one routing hint', () => {
     const { fabric } = createFabric();
 
     expect(() => new AgentProxy({ fabric })).toThrow(
-      /exactly one of address \| capabilities \| intentNl/,
+      /exactly one of address \| capabilities \| intentNl/
     );
 
     expect(
       () =>
         new AgentProxy({
           fabric,
-          address: new FameAddress("alpha@test"),
-          capabilities: ["test"],
-        }),
+          address: new FameAddress('alpha@test'),
+          capabilities: ['test'],
+        })
     ).toThrow(/exactly one/);
   });
 
-  it("throws for unsupported authentication and card retrieval", async () => {
+  it('throws for unsupported authentication and card retrieval', async () => {
     const { fabric } = createFabric();
-    const proxy = new AgentProxy({ address: new FameAddress("theta@test"), fabric });
+    const proxy = new AgentProxy({ address: new FameAddress('theta@test'), fabric });
 
     await expect(proxy.getAgentCard()).rejects.toThrow(/not yet implemented/);
     expect(() => proxy.authenticate({ schemes: [], credentials: null })).toThrow(
-      /Proxy authentication is not supported/,
+      /Proxy authentication is not supported/
     );
   });
 
-  it("times out streaming RPCs and unsubscribes", async () => {
+  it('times out streaming RPCs and unsubscribes', async () => {
     jest.useFakeTimers();
     try {
       const { fabric, mocks } = createFabric();
-      const proxy = new AgentProxy({ address: new FameAddress("timeout@test"), fabric });
+      const proxy = new AgentProxy({ address: new FameAddress('timeout@test'), fabric });
 
       let resolveNext: ((value: IteratorResult<unknown>) => void) | null = null;
       const iterator: AsyncIterator<unknown> = {
@@ -339,7 +348,7 @@ describe("AgentProxy", () => {
           () =>
             new Promise<IteratorResult<unknown>>((resolve) => {
               resolveNext = resolve;
-            }),
+            })
         ),
         return: jest.fn(async () => {
           resolveNext?.({ done: true, value: undefined });
@@ -354,8 +363,8 @@ describe("AgentProxy", () => {
       mocks.invokeStream.mockResolvedValue(fabricStream);
 
       const stream = await proxy.subscribeToTaskUpdates(
-        makeTaskParams({ id: "timeout", payload: null }),
-        { timeoutMs: 5 },
+        makeTaskParams({ id: 'timeout', payload: null }),
+        { timeoutMs: 5 }
       );
 
       const iterable = stream[Symbol.asyncIterator]();
@@ -368,21 +377,21 @@ describe("AgentProxy", () => {
       expect(iterator.return).toHaveBeenCalled();
       expect(mocks.invoke).toHaveBeenCalledWith(
         expect.any(FameAddress),
-        "tasks/sendUnsubscribe",
-        expect.objectContaining({ id: "timeout" })
+        'tasks/sendUnsubscribe',
+        expect.objectContaining({ id: 'timeout' })
       );
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it("limits streamed items using maxItems", async () => {
+  it('limits streamed items using maxItems', async () => {
     const { fabric, mocks } = createFabric();
-    const proxy = new AgentProxy({ address: new FameAddress("max@test"), fabric });
+    const proxy = new AgentProxy({ address: new FameAddress('max@test'), fabric });
 
     const events = [
-      { id: "max", status: { state: TaskState.WORKING } },
-      { id: "max", status: { state: TaskState.COMPLETED } },
+      { id: 'max', status: { state: TaskState.WORKING } },
+      { id: 'max', status: { state: TaskState.COMPLETED } },
     ];
 
     mocks.invoke.mockResolvedValue(null);
@@ -397,8 +406,8 @@ describe("AgentProxy", () => {
     mocks.invokeStream.mockResolvedValue(fabricStream);
 
     const stream = await proxy.subscribeToTaskUpdates(
-      makeTaskParams({ id: "max", payload: null }),
-      { maxItems: 1 },
+      makeTaskParams({ id: 'max', payload: null }),
+      { maxItems: 1 }
     );
 
     const iterator = stream[Symbol.asyncIterator]();
@@ -408,14 +417,14 @@ describe("AgentProxy", () => {
     expect(second.done).toBe(true);
     expect(mocks.invoke).toHaveBeenCalledWith(
       expect.any(FameAddress),
-      "tasks/sendUnsubscribe",
-      expect.objectContaining({ id: "max" })
+      'tasks/sendUnsubscribe',
+      expect.objectContaining({ id: 'max' })
     );
   });
 
-  it("delegates streaming calls for capability-based proxies", async () => {
+  it('delegates streaming calls for capability-based proxies', async () => {
     const { fabric, mocks } = createFabric();
-    const proxy = new AgentProxy({ capabilities: ["vision"], fabric });
+    const proxy = new AgentProxy({ capabilities: ['vision'], fabric });
 
     const capabilityFabricStream: AsyncIterable<unknown> = {
       [Symbol.asyncIterator]: () =>
@@ -425,36 +434,34 @@ describe("AgentProxy", () => {
     };
     mocks.invokeByCapabilityStream.mockResolvedValue(capabilityFabricStream);
 
-    await (proxy as any)._invokeTarget(
-      "tasks/send",
-      makeTaskParams({ id: "cap", payload: null }),
-      { streaming: true },
-    );
+    await (proxy as any)._invokeTarget('tasks/send', makeTaskParams({ id: 'cap', payload: null }), {
+      streaming: true,
+    });
 
     expect(mocks.invokeByCapabilityStream).toHaveBeenCalledWith(
-      ["vision"],
-      "tasks/send",
-      expect.objectContaining({ id: "cap" })
+      ['vision'],
+      'tasks/send',
+      expect.objectContaining({ id: 'cap' })
     );
   });
 
-  it("rejects intent-based proxies until implemented", async () => {
+  it('rejects intent-based proxies until implemented', async () => {
     const { fabric } = createFabric();
-    const proxy = new AgentProxy({ intentNl: "ask-weather", fabric });
+    const proxy = new AgentProxy({ intentNl: 'ask-weather', fabric });
 
-    await expect(
-      (proxy as any)._invokeTarget("tasks/send", { id: "intent" }),
-    ).rejects.toThrow(/Intent-based routing not yet supported/);
+    await expect((proxy as any)._invokeTarget('tasks/send', { id: 'intent' })).rejects.toThrow(
+      /Intent-based routing not yet supported/
+    );
   });
 
-  it("registers and fetches push notification configs via fabric", async () => {
+  it('registers and fetches push notification configs via fabric', async () => {
     const { fabric, mocks } = createFabric();
-    const proxy = new AgentProxy({ address: new FameAddress("notify@test"), fabric });
+    const proxy = new AgentProxy({ address: new FameAddress('notify@test'), fabric });
 
     const config = {
-      id: "notify",
+      id: 'notify',
       pushNotificationConfig: {
-        url: "https://callback",
+        url: 'https://callback',
         token: null,
         authentication: null,
       },
@@ -466,7 +473,7 @@ describe("AgentProxy", () => {
 
     mocks.invoke.mockResolvedValueOnce(config);
     const fetched = await proxy.getPushNotificationConfig({
-      id: "notify",
+      id: 'notify',
       metadata: null,
     });
     expect(fetched).toEqual(config);

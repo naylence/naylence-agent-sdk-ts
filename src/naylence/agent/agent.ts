@@ -6,10 +6,9 @@ import {
   generateId,
   getLogger,
   LogLevel,
-} from "naylence-runtime";
-import { RpcMixin } from "naylence-runtime";
-import type { FameService } from "naylence-core";
-import { TaskState } from "./a2a-types.js";
+} from 'naylence-runtime';
+import { RpcMixin } from 'naylence-runtime';
+import type { FameService } from 'naylence-core';
 import type {
   AgentCard,
   AuthenticationInfo,
@@ -20,36 +19,45 @@ import type {
   TaskQueryParams,
   TaskSendParams,
   TaskStatusUpdateEvent,
-} from "./a2a-types.js";
-import { makeTask } from "./util.js";
-import { resolveAgentProxyCtor } from "./agent-proxy-registry.js";
-import "./agent-proxy-default.js";
-export { registerAgentProxyFactory } from "./agent-proxy-registry.js";
-export type { AgentProxyConstructor } from "./agent-proxy-registry.js";
+} from './a2a-types.js';
+import { resolveAgentProxyCtor } from './agent-proxy-registry.js';
+import './agent-proxy-default.js';
+export { registerAgentProxyFactory } from './agent-proxy-registry.js';
+export type { AgentProxyConstructor } from './agent-proxy-registry.js';
 
-const logger = getLogger("naylence.agent.agent");
+import type { BaseAgent } from './base-agent.js';
+
+const logger = getLogger('naylence.agent.agent');
 
 export type Payload = Record<string, unknown> | string | null;
 export type Targets = Iterable<readonly [FameAddress | string, Payload]>;
 
-type AgentTaskHandler = (
-  payload: Payload,
-  id: string | null,
-) => unknown | Promise<unknown>;
+type AgentTaskHandler = (payload: Payload, id: string | null) => unknown | Promise<unknown>;
 
-type AgentTaskResult<TAgent extends Agent> = Awaited<
-  ReturnType<TAgent["runTask"]>
->;
+type AgentTaskResult<TAgent extends Agent> = Awaited<ReturnType<TAgent['runTask']>>;
+
+export type BaseAgentConstructor = new (name?: string | null, options?: any) => BaseAgent;
+
+let registeredBaseAgentCtor: BaseAgentConstructor | null = null;
+
+function requireBaseAgentCtor(): BaseAgentConstructor {
+  if (!registeredBaseAgentCtor) {
+    throw new Error('BaseAgent implementation has not been registered yet.');
+  }
+  return registeredBaseAgentCtor;
+}
+
+/** @internal */
+export function registerBaseAgentConstructor(ctor: BaseAgentConstructor): void {
+  registeredBaseAgentCtor = ctor;
+}
 
 export interface AgentProxyContract<TAgent extends Agent = Agent> {
-  runTask(
-    payload: Payload,
-    id: string | null,
-  ): Promise<AgentTaskResult<TAgent>>;
+  runTask(payload: Payload, id: string | null): Promise<AgentTaskResult<TAgent>>;
 }
 
 const isNodeRuntime = (): boolean =>
-  typeof process !== "undefined" && process.release?.name === "node";
+  typeof process !== 'undefined' && process.release?.name === 'node';
 
 const LOG_LEVEL_KEYWORDS: Record<string, LogLevel> = {
   critical: LogLevel.CRITICAL,
@@ -62,14 +70,14 @@ const LOG_LEVEL_KEYWORDS: Record<string, LogLevel> = {
 };
 
 function normalizeLogLevel(level: string | number | LogLevel): LogLevel {
-  if (typeof level === "number") {
+  if (typeof level === 'number') {
     if (Object.values(LogLevel).includes(level)) {
       return level as LogLevel;
     }
     throw new Error(`Unsupported numeric log level: ${level}`);
   }
 
-  if (typeof level === "string") {
+  if (typeof level === 'string') {
     const keyword = level.trim().toLowerCase();
     const resolved = LOG_LEVEL_KEYWORDS[keyword];
     if (!resolved) {
@@ -113,15 +121,15 @@ async function setupSignalHandlers(stop: Deferred<void>): Promise<() => void> {
     return () => {};
   }
 
-  const { default: process } = await import("node:process");
+  const { default: process } = await import('node:process');
   const handler = () => stop.resolve();
 
-  process.once("SIGINT", handler);
-  process.once("SIGTERM", handler);
+  process.once('SIGINT', handler);
+  process.once('SIGTERM', handler);
 
   return () => {
-    process.off("SIGINT", handler);
-    process.off("SIGTERM", handler);
+    process.off('SIGINT', handler);
+    process.off('SIGTERM', handler);
   };
 }
 
@@ -145,7 +153,7 @@ async function acquireFabric(options?: Record<string, unknown>): Promise<{
       try {
         await fabric.exit();
       } catch (error) {
-        logger.warning("fabric_exit_failed", { error });
+        logger.warning('fabric_exit_failed', { error });
       }
     },
   };
@@ -158,12 +166,12 @@ function toFameAddress(value: FameAddress | string): FameAddress {
 function invokeProxyRunTask(
   proxy: AgentProxyContract,
   payload: Payload,
-  taskId: string,
+  taskId: string
 ): Promise<any> {
-  if (typeof proxy.runTask === "function") {
+  if (typeof proxy.runTask === 'function') {
     return proxy.runTask(payload, taskId);
   }
-  throw new Error("AgentProxy must implement runTask");
+  throw new Error('AgentProxy must implement runTask');
 }
 
 export interface AgentRemoteOptions {
@@ -187,6 +195,10 @@ export interface AgentServeOptions {
 }
 
 export abstract class Agent extends RpcMixin implements FameService {
+  get capabilities(): string[] | undefined {
+    return undefined;
+  }
+
   abstract get name(): string | null;
 
   abstract get spec(): Record<string, unknown>;
@@ -204,28 +216,26 @@ export abstract class Agent extends RpcMixin implements FameService {
   abstract cancelTask(params: TaskIdParams): Promise<Task>;
 
   abstract subscribeToTaskUpdates(
-    params: TaskSendParams,
+    params: TaskSendParams
   ): AsyncIterable<TaskStatusUpdateEvent | TaskArtifactUpdateEvent>;
 
   abstract unsubscribeTask(params: TaskIdParams): Promise<any>;
 
   abstract registerPushEndpoint(
-    config: TaskPushNotificationConfig,
+    config: TaskPushNotificationConfig
   ): Promise<TaskPushNotificationConfig>;
 
-  abstract getPushNotificationConfig(
-    params: TaskIdParams,
-  ): Promise<TaskPushNotificationConfig>;
+  abstract getPushNotificationConfig(params: TaskIdParams): Promise<TaskPushNotificationConfig>;
 
   static remote<TAgent extends Agent>(
     this: typeof Agent,
-    options: AgentRemoteOptions,
+    options: AgentRemoteOptions
   ): AgentProxyContract<TAgent> {
     const { address, capabilities, fabric } = options;
     const selected = Number(address != null) + Number(capabilities != null);
 
     if (selected !== 1) {
-      throw new Error("Provide exactly one of address | capabilities");
+      throw new Error('Provide exactly one of address | capabilities');
     }
 
     const resolvedFabric = fabric ?? FameFabric.current();
@@ -244,96 +254,41 @@ export abstract class Agent extends RpcMixin implements FameService {
   static remoteByAddress<TAgent extends Agent>(
     this: typeof Agent,
     address: FameAddress | string,
-    options: { fabric?: FameFabric } = {},
+    options: { fabric?: FameFabric } = {}
   ): AgentProxyContract<TAgent> {
-    return this.remote<TAgent>({ address, fabric: options.fabric });
+    const remoteOptions: AgentRemoteOptions = { address };
+    if (options.fabric !== undefined) {
+      remoteOptions.fabric = options.fabric;
+    }
+    return this.remote<TAgent>(remoteOptions);
   }
 
   static remoteByCapabilities<TAgent extends Agent>(
     this: typeof Agent,
     capabilities: string[],
-    options: { fabric?: FameFabric } = {},
+    options: { fabric?: FameFabric } = {}
   ): AgentProxyContract<TAgent> {
-    return this.remote<TAgent>({ capabilities, fabric: options.fabric });
+    const remoteOptions: AgentRemoteOptions = { capabilities };
+    if (options.fabric !== undefined) {
+      remoteOptions.fabric = options.fabric;
+    }
+    return this.remote<TAgent>(remoteOptions);
   }
 
-  static fromHandler(handler: AgentTaskHandler): Agent {
-    const normalizedHandler: AgentTaskHandler = async (payload, id) =>
-      handler(payload, id);
+  static async fromHandler(handler: AgentTaskHandler): Promise<Agent> {
+    if (!registeredBaseAgentCtor) {
+      await import('./base-agent.js');
+    }
+    const BaseAgentCtor = requireBaseAgentCtor();
+    const normalizedHandler: AgentTaskHandler = async (payload, id) => handler(payload, id);
 
-    class HandlerAgent extends Agent {
-      #name = generateId();
-
-      get name(): string | null {
-        return this.#name;
-      }
-
-      get spec(): Record<string, unknown> {
-        return {};
-      }
-
-      async getAgentCard(): Promise<AgentCard> {
-        throw new Error("AgentCard not supported for handler agents");
-      }
-
-      authenticate(_credentials: AuthenticationInfo): boolean {
-        return true;
-      }
-
-      async startTask(params: TaskSendParams): Promise<Task> {
-        let payload: Payload = null;
-        const firstPart = params.message?.parts?.[0];
-        if (firstPart) {
-          if (firstPart.type === "text") {
-            payload = firstPart.text;
-          } else if (firstPart.type === "data") {
-            payload = firstPart.data;
-          }
-        }
-
-        const taskId = params.id ?? generateId();
-        const response = await this.runTask(payload, taskId);
-
-        return makeTask({
-          id: taskId,
-          state: TaskState.COMPLETED,
-          payload: response ?? null,
-          sessionId: params.sessionId ?? params.id ?? null,
-        });
+    class HandlerAgent extends BaseAgentCtor {
+      constructor() {
+        super(generateId());
       }
 
       async runTask(payload: Payload, id: string | null): Promise<any> {
         return normalizedHandler(payload, id);
-      }
-
-      async getTaskStatus(_params: TaskQueryParams): Promise<Task> {
-        throw new Error("Status queries not supported for handler agents");
-      }
-
-      async cancelTask(_params: TaskIdParams): Promise<Task> {
-        throw new Error("Cancel not supported for handler agents");
-      }
-
-      async *subscribeToTaskUpdates(
-        _params: TaskSendParams,
-      ): AsyncIterable<TaskStatusUpdateEvent | TaskArtifactUpdateEvent> {
-        throw new Error("Subscriptions not supported for handler agents");
-      }
-
-      async unsubscribeTask(_params: TaskIdParams): Promise<any> {
-        throw new Error("Unsubscribe not supported for handler agents");
-      }
-
-      async registerPushEndpoint(
-        _config: TaskPushNotificationConfig,
-      ): Promise<TaskPushNotificationConfig> {
-        throw new Error("Push notifications not supported for handler agents");
-      }
-
-      async getPushNotificationConfig(
-        _params: TaskIdParams,
-      ): Promise<TaskPushNotificationConfig> {
-        throw new Error("Push notifications not supported for handler agents");
       }
     }
 
@@ -344,17 +299,18 @@ export abstract class Agent extends RpcMixin implements FameService {
     this: typeof Agent,
     addresses: Array<FameAddress | string>,
     payload: Payload = null,
-    options: AgentRunManyOptions = {},
+    options: AgentRunManyOptions = {}
   ): Promise<Array<[string, any | Error]>> {
-    const targets: Array<readonly [FameAddress | string, Payload]> =
-      addresses.map((address) => [address, payload] as const);
+    const targets: Array<readonly [FameAddress | string, Payload]> = addresses.map(
+      (address) => [address, payload] as const
+    );
     return this.runMany(targets, options);
   }
 
   static async runMany<TAgent extends Agent>(
     this: typeof Agent,
     targets: Targets,
-    options: AgentRunManyOptions = {},
+    options: AgentRunManyOptions = {}
   ): Promise<Array<[string, any | Error]>> {
     const { fabric, gatherExceptions = true } = options;
     const resolvedFabric = fabric ?? FameFabric.current();
@@ -389,18 +345,14 @@ export abstract class Agent extends RpcMixin implements FameService {
     const settled = await Promise.allSettled(tasks);
     return settled.map((result, index) => {
       const addressKey = addresses[index];
-      if (result.status === "fulfilled") {
+      if (result.status === 'fulfilled') {
         return [addressKey, result.value] as const;
       }
       return [addressKey, result.reason] as const;
     });
   }
 
-
-  async aserve(
-    address: FameAddress | string,
-    options: AgentServeOptions = {},
-  ): Promise<void> {
+  async aserve(address: FameAddress | string, options: AgentServeOptions = {}): Promise<void> {
     const { fabricOptions, logLevel = null } = options;
 
     if (logLevel !== null && logLevel !== undefined) {
@@ -412,18 +364,17 @@ export abstract class Agent extends RpcMixin implements FameService {
     const removeSignalHandlers = await setupSignalHandlers(stop);
     const { fabric, release } = await acquireFabric(fabricOptions);
 
-    const serviceName =
-      address instanceof FameAddress ? address.toString() : String(address);
+    const serviceName = address instanceof FameAddress ? address.toString() : String(address);
 
     try {
       await fabric.serve(this, serviceName);
-      logger.info("agent_live", {
+      logger.info('agent_live', {
         agent: this.constructor.name,
         address: serviceName,
       });
 
       await stop.promise;
-      logger.info("agent_shutdown", {
+      logger.info('agent_shutdown', {
         agent: this.constructor.name,
         address: serviceName,
       });
@@ -433,10 +384,8 @@ export abstract class Agent extends RpcMixin implements FameService {
     }
   }
 
-  serve(
-    address: FameAddress | string,
-    options: AgentServeOptions = {},
-  ): Promise<void> {
+  serve(address: FameAddress | string, options: AgentServeOptions = {}): Promise<void> {
     return this.aserve(address, options);
   }
 }
+

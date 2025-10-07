@@ -1,5 +1,5 @@
-import { DataFrame } from "naylence-core";
-import type { FameMessageResponse } from "naylence-core";
+import { DataFrame } from 'naylence-core';
+import type { FameMessageResponse } from 'naylence-core';
 import {
   DataPart,
   DataPartSchema,
@@ -13,13 +13,13 @@ import {
   TaskStatusSchema,
   TextPart,
   TextPartSchema,
-} from "./a2a-types.js";
+} from './a2a-types.js';
 
 export function extractId(obj: unknown): string | undefined {
-  if (obj && typeof obj === "object") {
+  if (obj && typeof obj === 'object') {
     const candidate = obj as Record<string, unknown>;
     const value = candidate.id;
-    if (typeof value === "string") {
+    if (typeof value === 'string') {
       return value;
     }
   }
@@ -28,9 +28,7 @@ export function extractId(obj: unknown): string | undefined {
 
 function decodeBase64(payload: string): Uint8Array {
   const globalAtob =
-    typeof globalThis.atob === "function"
-      ? globalThis.atob.bind(globalThis)
-      : null;
+    typeof globalThis.atob === 'function' ? globalThis.atob.bind(globalThis) : null;
   if (globalAtob) {
     const binary = globalAtob(payload);
     const bytes = new Uint8Array(binary.length);
@@ -43,24 +41,22 @@ function decodeBase64(payload: string): Uint8Array {
   const maybeBuffer = (globalThis as Record<string, unknown>).Buffer as
     | { from(input: string, encoding: string): ArrayLike<number> | Uint8Array }
     | undefined;
-  if (maybeBuffer && typeof maybeBuffer.from === "function") {
-    const buffer = maybeBuffer.from(payload, "base64");
+  if (maybeBuffer && typeof maybeBuffer.from === 'function') {
+    const buffer = maybeBuffer.from(payload, 'base64');
     return buffer instanceof Uint8Array ? buffer : Uint8Array.from(buffer);
   }
 
-  throw new Error("Base64 decoding is not supported in this environment");
+  throw new Error('Base64 decoding is not supported in this environment');
 }
 
 export function decodeFameDataPayload(frame: DataFrame): unknown {
-  if (frame.codec === "b64" && typeof frame.payload === "string") {
+  if (frame.codec === 'b64' && typeof frame.payload === 'string') {
     return decodeBase64(frame.payload);
   }
   return frame.payload;
 }
 
-export function firstDataPart(
-  message: Message | null | undefined,
-): Record<string, unknown> | null {
+export function firstDataPart(message: Message | null | undefined): Record<string, unknown> | null {
   if (!message || !Array.isArray(message.parts) || message.parts.length === 0) {
     return null;
   }
@@ -73,9 +69,7 @@ export function firstDataPart(
   return parsed.data.data;
 }
 
-export function firstTextPart(
-  message: Message | null | undefined,
-): string | null {
+export function firstTextPart(message: Message | null | undefined): string | null {
   if (!message || !Array.isArray(message.parts) || message.parts.length === 0) {
     return null;
   }
@@ -90,11 +84,11 @@ export function firstTextPart(
 
 export interface MakeTaskParamsOptions {
   id: string;
-  role?: Message["role"];
+  role?: Message['role'];
   payload?: Record<string, unknown> | string | null;
   sessionId?: string | null;
   acceptedOutputModes?: string[] | null;
-  pushNotification?: TaskSendParams["pushNotification"];
+  pushNotification?: TaskSendParams['pushNotification'];
   historyLength?: number | null;
   metadata?: Record<string, unknown> | null;
 }
@@ -102,7 +96,7 @@ export interface MakeTaskParamsOptions {
 export function makeTaskParams(options: MakeTaskParamsOptions): TaskSendParams {
   const {
     id,
-    role = "agent",
+    role = 'agent',
     payload = null,
     sessionId = null,
     acceptedOutputModes = null,
@@ -112,15 +106,15 @@ export function makeTaskParams(options: MakeTaskParamsOptions): TaskSendParams {
   } = options;
 
   let part: Part;
-  if (typeof payload === "string") {
+  if (typeof payload === 'string') {
     part = {
-      type: "text",
+      type: 'text',
       text: payload,
       metadata: null,
     } satisfies TextPart;
   } else {
     part = {
-      type: "data",
+      type: 'data',
       data: payload ?? {},
       metadata: null,
     } satisfies DataPart;
@@ -147,20 +141,14 @@ export function makeTaskParams(options: MakeTaskParamsOptions): TaskSendParams {
 
 export interface MakeTaskOptions {
   id: string;
-  role?: Message["role"];
+  role?: Message['role'];
   state?: TaskState;
   payload: Record<string, unknown> | string | null;
   sessionId?: string | null;
 }
 
 export function makeTask(options: MakeTaskOptions): Task {
-  const {
-    id,
-    role = "agent",
-    state = TaskState.WORKING,
-    payload,
-    sessionId = null,
-  } = options;
+  const { id, role = 'agent', state = TaskState.WORKING, payload, sessionId = null } = options;
 
   const message = makeMessage(payload, role);
 
@@ -182,21 +170,17 @@ export function makeTask(options: MakeTaskOptions): Task {
 
 export function makeMessage(
   payload: Record<string, unknown> | string | null,
-  role: Message["role"] = "agent",
+  role: Message['role'] = 'agent'
 ): Message | null {
   if (payload === null || payload === undefined) {
     return null;
   }
 
   let parts: Part[];
-  if (typeof payload === "string") {
-    parts = [
-      TextPartSchema.parse({ type: "text", text: payload, metadata: null }),
-    ];
+  if (typeof payload === 'string') {
+    parts = [TextPartSchema.parse({ type: 'text', text: payload, metadata: null })];
   } else {
-    parts = [
-      DataPartSchema.parse({ type: "data", data: payload, metadata: null }),
-    ];
+    parts = [DataPartSchema.parse({ type: 'data', data: payload, metadata: null })];
   }
 
   return MessageSchema.parse({
