@@ -1,9 +1,9 @@
 {
   "name": "quickstart",
   "version": "1.0.0",
-  "description": "",
-  "license": "ISC",
-  "author": "",
+  "description": "Naylence Agent SDK TypeScript Quickstart Example",
+  "license": "Apache-2.0",
+  "author": "Naylence Dev",
   "type": "commonjs",
   "main": "index.js",
   "scripts": {

@@ -1,4 +1,5 @@
-import { FameAddress, FameFabric, generateId } from 'naylence-runtime';
+import { FameAddress, generateId, RpcProxy } from 'naylence-runtime';
+import type { FameFabric } from 'naylence-runtime';
 import type { FameEnvelope } from 'naylence-core';
 import {
   type AgentCard,
@@ -79,9 +80,12 @@ async function nextWithTimeout<T>(
   }
 }
 
-export class AgentProxy<TAgent extends Agent = Agent> implements AgentProxyInterface<TAgent> {
-  private readonly address: FameAddress | null;
-  private readonly capabilities: string[] | null;
+export class AgentProxy<TAgent extends Agent = Agent>
+  extends RpcProxy
+  implements AgentProxyInterface<TAgent>
+{
+  private readonly targetAddress: FameAddress | null;
+  private readonly targetCapabilities: string[] | null;
   private readonly intentNl: string | null;
   private readonly fabric: FameFabric;
 
@@ -94,10 +98,19 @@ export class AgentProxy<TAgent extends Agent = Agent> implements AgentProxyInter
       throw new Error('Provide exactly one of address | capabilities | intentNl');
     }
 
-    this.address = address ? toFameAddress(address) : null;
-    this.capabilities = capabilities ? [...capabilities] : null;
+    const normalizedAddress = address != null ? toFameAddress(address) : null;
+    const normalizedCapabilities = capabilities != null ? [...capabilities] : null;
+
+    super({
+      fabric,
+      ...(normalizedAddress ? { address: normalizedAddress } : {}),
+      ...(normalizedCapabilities ? { capabilities: normalizedCapabilities } : {}),
+    });
+
+    this.targetAddress = normalizedAddress;
+    this.targetCapabilities = normalizedCapabilities;
     this.intentNl = intentNl;
-    this.fabric = fabric;
+  this.fabric = fabric;
   }
 
   get name(): string | null {
@@ -105,13 +118,23 @@ export class AgentProxy<TAgent extends Agent = Agent> implements AgentProxyInter
   }
 
   get spec(): Record<string, unknown> {
-    return {
-      address: this.address ? this.address.toString() : null,
+    const spec: Record<string, unknown> = {
+      address: this.targetAddress ? this.targetAddress.toString() : null,
     };
+
+    if (this.targetCapabilities) {
+      spec.capabilities = [...this.targetCapabilities];
+    }
+
+    if (this.intentNl) {
+      spec.intentNl = this.intentNl;
+    }
+
+    return spec;
   }
 
   get addressRef(): FameAddress | null {
-    return this.address;
+    return this.targetAddress;
   }
 
   async getAgentCard(): Promise<AgentCard> {
@@ -382,24 +405,28 @@ export class AgentProxy<TAgent extends Agent = Agent> implements AgentProxyInter
     params: Record<string, unknown> | TaskSendParams,
     options: { streaming?: boolean } = {}
   ): Promise<any> {
-    const payload = toRecord(params);
-
-    if (this.address) {
-      if (options.streaming) {
-        return await this.fabric.invokeStream(this.address, method, payload);
-      }
-      return await this.fabric.invoke(this.address, method, payload);
-    }
-
-    if (this.capabilities) {
-      if (options.streaming) {
-        return await this.fabric.invokeByCapabilityStream(this.capabilities, method, payload);
-      }
-      return await this.fabric.invokeByCapability(this.capabilities, method, payload);
-    }
-
     if (this.intentNl) {
       throw new Error('Intent-based routing not yet supported');
+    }
+
+    const payload = toRecord(params);
+
+    if (this.targetAddress) {
+      if (options.streaming) {
+        return await this.fabric.invokeStream(this.targetAddress, method, payload);
+      }
+      return await this.fabric.invoke(this.targetAddress, method, payload);
+    }
+
+    if (this.targetCapabilities) {
+      if (options.streaming) {
+        return await this.fabric.invokeByCapabilityStream(
+          this.targetCapabilities,
+          method,
+          payload
+        );
+      }
+      return await this.fabric.invokeByCapability(this.targetCapabilities, method, payload);
     }
 
     throw new Error('Proxy has no routing target');
