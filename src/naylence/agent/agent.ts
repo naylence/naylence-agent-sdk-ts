@@ -21,11 +21,11 @@ import type {
   TaskStatusUpdateEvent,
 } from './a2a-types.js';
 import { resolveAgentProxyCtor } from './agent-proxy-registry.js';
-import './agent-proxy-default.js';
 export { registerAgentProxyFactory } from './agent-proxy-registry.js';
 export type { AgentProxyConstructor } from './agent-proxy-registry.js';
 
 import type { BaseAgent } from './base-agent.js';
+import type { AgentProxy } from './agent-proxy.js';
 
 const logger = getLogger('naylence.agent.agent');
 
@@ -34,7 +34,6 @@ export type Targets = Iterable<readonly [FameAddress | string, Payload]>;
 
 type AgentTaskHandler = (payload: Payload, id: string | null) => unknown | Promise<unknown>;
 
-type AgentTaskResult<TAgent extends Agent> = Awaited<ReturnType<TAgent['runTask']>>;
 
 export type BaseAgentConstructor = new (name?: string | null, options?: any) => BaseAgent;
 
@@ -50,10 +49,6 @@ function requireBaseAgentCtor(): BaseAgentConstructor {
 /** @internal */
 export function registerBaseAgentConstructor(ctor: BaseAgentConstructor): void {
   registeredBaseAgentCtor = ctor;
-}
-
-export interface AgentProxyContract<TAgent extends Agent = Agent> {
-  runTask(payload: Payload, id: string | null): Promise<AgentTaskResult<TAgent>>;
 }
 
 const isNodeRuntime = (): boolean =>
@@ -164,7 +159,7 @@ function toFameAddress(value: FameAddress | string): FameAddress {
 }
 
 function invokeProxyRunTask(
-  proxy: AgentProxyContract,
+  proxy: Agent,
   payload: Payload,
   taskId: string
 ): Promise<any> {
@@ -230,7 +225,7 @@ export abstract class Agent extends RpcMixin implements FameService {
   static remote<TAgent extends Agent>(
     this: typeof Agent,
     options: AgentRemoteOptions
-  ): AgentProxyContract<TAgent> {
+  ): AgentProxy<TAgent> {
     const { address, capabilities, fabric } = options;
     const selected = Number(address != null) + Number(capabilities != null);
 
@@ -255,7 +250,7 @@ export abstract class Agent extends RpcMixin implements FameService {
     this: typeof Agent,
     address: FameAddress | string,
     options: { fabric?: FameFabric } = {}
-  ): AgentProxyContract<TAgent> {
+  ): AgentProxy<TAgent> {
     const remoteOptions: AgentRemoteOptions = { address };
     if (options.fabric !== undefined) {
       remoteOptions.fabric = options.fabric;
@@ -267,7 +262,7 @@ export abstract class Agent extends RpcMixin implements FameService {
     this: typeof Agent,
     capabilities: string[],
     options: { fabric?: FameFabric } = {}
-  ): AgentProxyContract<TAgent> {
+  ): AgentProxy<TAgent> {
     const remoteOptions: AgentRemoteOptions = { capabilities };
     if (options.fabric !== undefined) {
       remoteOptions.fabric = options.fabric;
@@ -315,7 +310,7 @@ export abstract class Agent extends RpcMixin implements FameService {
     const { fabric, gatherExceptions = true } = options;
     const resolvedFabric = fabric ?? FameFabric.current();
 
-    const proxies = new Map<string, AgentProxyContract<TAgent>>();
+    const proxies = new Map<string, Agent>();
     const tasks: Promise<any>[] = [];
     const addresses: string[] = [];
 

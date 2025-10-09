@@ -1,4 +1,4 @@
-import { FameAddress, generateId, RpcProxy } from 'naylence-runtime';
+import { FameAddress, generateId, createRpcProxy } from 'naylence-runtime';
 import type { FameFabric } from 'naylence-runtime';
 import type { FameEnvelope } from 'naylence-core';
 import {
@@ -27,7 +27,7 @@ import {
 import { TERMINAL_TASK_STATES } from './task-states.js';
 import { firstTextPart, makeTaskParams } from './util.js';
 import type { MakeTaskParamsOptions } from './util.js';
-import type { Agent, AgentProxyContract as AgentProxyInterface, Payload } from './agent.js';
+import { Agent, type Payload } from './agent.js';
 
 type RunTaskPayload = Payload;
 
@@ -58,6 +58,39 @@ function toFameAddress(address: FameAddress | string): FameAddress {
   return address instanceof FameAddress ? address : new FameAddress(String(address));
 }
 
+function wrapAgentProxy<T extends AgentProxy>(proxy: T): T {
+  // Create RPC proxy options - only include address or capabilities, not both
+  const proxyOptions: any = {
+    fabric: proxy.proxyFabric,
+  };
+
+  if (proxy.address) {
+    proxyOptions.address = proxy.address;
+  } else if (proxy.capabilities) {
+    proxyOptions.capabilities = proxy.capabilities;
+  }
+
+  // Create an RPC proxy with the same configuration as the AgentProxy
+  const rpcProxy = createRpcProxy(proxyOptions);
+
+  // Create a new Proxy that intercepts method calls and routes them appropriately
+  return new Proxy(proxy, {
+    get(target, prop, receiver) {
+      // If the property exists on the original AgentProxy, use it
+      if (prop in target) {
+        return Reflect.get(target, prop, receiver);
+      }
+
+      // For RPC methods (public methods not starting with _), delegate to RPC proxy
+      if (typeof prop === 'string' && !prop.startsWith('_')) {
+        return Reflect.get(rpcProxy, prop, rpcProxy);
+      }
+
+      return Reflect.get(target, prop, receiver);
+    },
+  }) as T;
+}
+
 async function nextWithTimeout<T>(
   iterator: AsyncIterator<T>,
   timeoutMs: number | null | undefined
@@ -80,14 +113,14 @@ async function nextWithTimeout<T>(
   }
 }
 
-export class AgentProxy<TAgent extends Agent = Agent>
-  extends RpcProxy
-  implements AgentProxyInterface<TAgent>
-{
+export class AgentProxy<TAgent extends Agent = Agent> extends Agent {
   private readonly targetAddress: FameAddress | null;
   private readonly targetCapabilities: string[] | null;
   private readonly intentNl: string | null;
   private readonly fabric: FameFabric;
+
+  // Index signature to allow arbitrary RPC method calls without type errors
+  [key: string]: any;
 
   constructor(options: AgentProxyCtorOptions) {
     const { address = null, capabilities = null, intentNl = null, fabric } = options;
@@ -101,16 +134,13 @@ export class AgentProxy<TAgent extends Agent = Agent>
     const normalizedAddress = address != null ? toFameAddress(address) : null;
     const normalizedCapabilities = capabilities != null ? [...capabilities] : null;
 
-    super({
-      fabric,
-      ...(normalizedAddress ? { address: normalizedAddress } : {}),
-      ...(normalizedCapabilities ? { capabilities: normalizedCapabilities } : {}),
-    });
+    // Call parent constructor - Agent extends RpcMixin which has no required params
+    super();
 
     this.targetAddress = normalizedAddress;
     this.targetCapabilities = normalizedCapabilities;
     this.intentNl = intentNl;
-  this.fabric = fabric;
+    this.fabric = fabric;
   }
 
   get name(): string | null {
@@ -137,6 +167,18 @@ export class AgentProxy<TAgent extends Agent = Agent>
     return this.targetAddress;
   }
 
+  get address(): FameAddress | null {
+    return this.targetAddress;
+  }
+
+  get capabilities(): string[] | undefined {
+    return this.targetCapabilities ?? undefined;
+  }
+
+  get proxyFabric(): FameFabric {
+    return this.fabric;
+  }
+
   async getAgentCard(): Promise<AgentCard> {
     throw new Error('Fetching remote AgentCard not yet implemented');
   }
@@ -157,7 +199,7 @@ export class AgentProxy<TAgent extends Agent = Agent>
     let status: TaskStatus = task.status;
 
     if (!TERMINAL_TASK_STATES.has(status.state)) {
-      const updates = await this.subscribeToTaskUpdates(
+      const updates = this.subscribeToTaskUpdates(
         makeTaskParams({ id: taskId, payload: null })
       );
       const iterator = updates[Symbol.asyncIterator]();
@@ -275,10 +317,10 @@ export class AgentProxy<TAgent extends Agent = Agent>
     return TaskSchema.parse(result);
   }
 
-  async subscribeToTaskUpdates(
+  subscribeToTaskUpdates(
     params: TaskSendParams,
     options: StreamOptions = {}
-  ): Promise<AsyncIterable<TaskStatusUpdateEvent | TaskArtifactUpdateEvent>> {
+  ): AsyncIterable<TaskStatusUpdateEvent | TaskArtifactUpdateEvent> {
     const payload = TaskSendParamsSchema.parse(params);
 
     return this._streamRpc(
@@ -436,14 +478,16 @@ export class AgentProxy<TAgent extends Agent = Agent>
     address: FameAddress,
     options: { fabric: FameFabric }
   ): AgentProxy<TAgent> {
-    return new AgentProxy<TAgent>({ address, fabric: options.fabric });
+    const proxy = new AgentProxy<TAgent>({ address, fabric: options.fabric });
+    return wrapAgentProxy(proxy);
   }
 
   static remoteByCapabilities<TAgent extends Agent>(
     capabilities: string[],
     options: { fabric: FameFabric }
   ): AgentProxy<TAgent> {
-    return new AgentProxy<TAgent>({ capabilities, fabric: options.fabric });
+    const proxy = new AgentProxy<TAgent>({ capabilities, fabric: options.fabric });
+    return wrapAgentProxy(proxy);
   }
 }
 export type { FameEnvelope };

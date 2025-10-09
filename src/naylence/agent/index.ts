@@ -7,3 +7,6 @@ export * from './errors.js';
 export * from './rpc-adapter.js';
 export * from './util.js';
 export * from './configs.js';
+
+// Register default agent proxy factory
+import './agent-proxy-default.js';

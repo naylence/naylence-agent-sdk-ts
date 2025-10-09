@@ -3,13 +3,14 @@ import process from 'node:process';
 import {
   Agent,
   registerAgentProxyFactory,
-  type AgentProxyContract,
   type Payload,
   type Targets,
 } from '../naylence/agent/agent.js';
 import * as runtime from 'naylence-runtime';
 import { TaskSendParamsSchema } from '../naylence/agent/a2a-types.js';
 import type { TaskSendParams, TaskQueryParams } from '../naylence/agent/a2a-types.js';
+// Import to register default agent proxy factory
+import '../naylence/agent/agent-proxy-default.js';
 
 const { FameAddress, FameFabric, fabricStack, LogLevel } = runtime;
 
@@ -57,29 +58,25 @@ describe('Agent', () => {
 
   it('registers proxy factory and resolves address', () => {
     const fabric = {} as FabricLike;
-    const proxy: AgentProxyContract = {
+    const proxy: Agent = {
       runTask: jest.fn(async () => 'ok'),
-    };
+    } as any;
 
     const remoteByAddress = jest
       .fn((address: AddressLike, _options: { fabric: FabricLike }) => {
         return proxy;
       })
-      .mockName('remoteByAddress') as jest.MockedFunction<
-      (address: AddressLike, options: { fabric: FabricLike }) => AgentProxyContract
-    >;
+      .mockName('remoteByAddress');
 
     const remoteByCapabilities = jest
       .fn((capabilities: string[], _options: { fabric: FabricLike }) => {
         return proxy;
       })
-      .mockName('remoteByCapabilities') as jest.MockedFunction<
-      (capabilities: string[], options: { fabric: FabricLike }) => AgentProxyContract
-    >;
+      .mockName('remoteByCapabilities');
 
     registerAgentProxyFactory({
-      remoteByAddress,
-      remoteByCapabilities,
+      remoteByAddress: remoteByAddress as any,
+      remoteByCapabilities: remoteByCapabilities as any,
     });
 
     const resolved = Agent.remote({ address: 'agent@fabric', fabric });
@@ -93,9 +90,9 @@ describe('Agent', () => {
 
   it('uses capability-based remotes when provided', () => {
     const fabric = {} as FabricLike;
-    const proxy: AgentProxyContract = {
+    const proxy: Agent = {
       runTask: jest.fn(async () => 'ok'),
-    };
+    } as any;
 
     const remoteByAddress = jest
       .fn((address: AddressLike, _options: { fabric: FabricLike }) => proxy)
