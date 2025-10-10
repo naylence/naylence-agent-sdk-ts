@@ -14,9 +14,11 @@ import {
   FameFabric,
   generateId,
   getLogger,
+  getCurrentNode,
   type KeyValueStore,
   type StorageProvider,
 } from 'naylence-runtime';
+import { z } from 'zod';
 
 import {
   Agent,
@@ -106,18 +108,194 @@ class StateContext<StateT extends BaseAgentState> {
   }
 }
 
+/**
+ * Base class for agent state with Pydantic-like serialization and validation.
+ * 
+ * Provides feature parity with Python's BaseAgentState:
+ * - Schema-based validation using Zod (equivalent to Pydantic validators)
+ * - Type-safe serialization and deserialization
+ * - Custom toJSON/fromJSON methods for proper persistence
+ * 
+ * @example Basic usage
+ * ```typescript
+ * import { z } from 'zod';
+ * 
+ * const CounterStateSchema = z.object({
+ *   count: z.number().int().nonnegative(),
+ * });
+ * 
+ * class CounterState extends BaseAgentState {
+ *   static readonly schema = CounterStateSchema;
+ *   count: number = 0;
+ * }
+ * ```
+ * 
+ * @example With nested objects
+ * ```typescript
+ * const ItemSchema = z.object({
+ *   id: z.string().uuid(),
+ *   name: z.string(),
+ * });
+ * 
+ * const InventoryStateSchema = z.object({
+ *   items: z.array(ItemSchema),
+ * });
+ * 
+ * class InventoryState extends BaseAgentState {
+ *   static readonly schema = InventoryStateSchema;
+ *   items: Array<{ id: string; name: string }> = [];
+ * }
+ * ```
+ */
 export class BaseAgentState {
-  private agent: BaseAgent<BaseAgentState> | null = null;
+  /**
+   * Zod schema for state validation.
+   * 
+   * Subclasses should override this to define their validation schema.
+   * This provides runtime type safety equivalent to Pydantic's field validators.
+   * 
+   * @example
+   * ```typescript
+ *   static readonly schema = z.object({
+   *   count: z.number().int(),
+   *   items: z.array(z.string()),
+   * });
+   * ```
+   */
+  static readonly schema: z.ZodType<any> = z.object({});
 
-  attachAgent(agent: BaseAgent<BaseAgentState>): void {
-    this.agent = agent;
+  /**
+   * Serialize state to JSON using schema validation.
+   * 
+   * Override in subclasses to customize serialization behavior.
+   * The default implementation:
+   * 1. Extracts all enumerable own properties
+   * 2. Validates against schema if defined
+   * 3. Returns validated data
+   * 
+   * This is automatically called by JSON.stringify() and storage providers.
+   * 
+   * @returns Plain object representation of the state
+   * @throws {Error} If state doesn't match schema (wraps z.ZodError)
+   * 
+   * @example
+   * ```typescript
+   * toJSON() {
+   *   // Custom serialization with specific fields
+   *   return {
+   *     count: this.count,
+   *     lastUpdated: this.lastUpdated.toISOString(),
+   *   };
+   * }
+   * ```
+   */
+  toJSON(): unknown {
+    const ctor = this.constructor as typeof BaseAgentState;
+    
+    // Extract all enumerable own properties (exclude methods and agent reference)
+    const data: Record<string, unknown> = {};
+    for (const key in this) {
+      if (Object.prototype.hasOwnProperty.call(this, key)) {
+        const value = this[key];
+        
+        // Handle nested BaseAgentState instances
+        if (value && typeof value === 'object' && 'toJSON' in value && typeof value.toJSON === 'function') {
+          data[key] = value.toJSON();
+        } else {
+          data[key] = value;
+        }
+      }
+    }
+    
+    // If schema is defined, validate the extracted data
+    if (ctor.schema && ctor.schema !== BaseAgentState.schema) {
+      try {
+        // Validate and potentially transform the data
+        return ctor.schema.parse(data);
+      } catch (error) {
+        // Re-throw with context
+        if (error instanceof z.ZodError) {
+          const className = ctor.name;
+          const errorMessages = error.issues.map((e: z.ZodIssue) => 
+            `${e.path.join('.')}: ${e.message}`
+          ).join(', ');
+          throw new Error(`Failed to serialize ${className}: ${errorMessages}`);
+        }
+        throw error;
+      }
+    }
+    
+    return data;
   }
 
-  protected getAgent(): BaseAgent<BaseAgentState> {
-    if (!this.agent) {
-      throw new Error('State is not associated with an agent');
+  /**
+   * Deserialize and validate data using the schema.
+   * 
+   * This provides runtime type safety equivalent to Pydantic's model_validate_json.
+   * 
+   * @param data - Plain object data to deserialize
+   * @returns Validated instance of the state class
+   * @throws {z.ZodError} If data doesn't match schema
+   * 
+   * @example
+   * ```typescript
+   * const state = CounterState.fromJSON({ count: 42 });
+   * ```
+   * 
+   * @example Error handling
+   * ```typescript
+   * try {
+   *   const state = CounterState.fromJSON(untrustedData);
+   * } catch (error) {
+   *   if (error instanceof z.ZodError) {
+   *     console.error('Validation failed:', error.errors);
+   *   }
+   * }
+   * ```
+   */
+  static fromJSON<T extends BaseAgentState>(
+    this: new () => T,
+    data: unknown
+  ): T {
+    const ctor = this as unknown as typeof BaseAgentState;
+    
+    // Validate against schema if defined
+    let validated: any;
+    if (ctor.schema && ctor.schema !== BaseAgentState.schema) {
+      try {
+        validated = ctor.schema.parse(data);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          const className = ctor.name;
+          const errorMessages = error.issues.map((e: z.ZodIssue) => 
+            `${e.path.join('.')}: ${e.message}`
+          ).join(', ');
+          throw new Error(`Failed to deserialize ${className}: ${errorMessages}`);
+        }
+        throw error;
+      }
+    } else {
+      validated = data;
     }
-    return this.agent;
+    
+    // Create instance and assign validated data
+    const instance = new this();
+    Object.assign(instance, validated);
+    return instance;
+  }
+
+  /**
+   * Create a validated copy of this state instance.
+   * 
+   * Useful for creating snapshots or clones with validation.
+   * 
+   * @returns A new instance with the same data
+   * @throws {z.ZodError} If current state doesn't match schema
+   */
+  clone(): this {
+    const ctor = this.constructor as new () => this;
+    const json = this.toJSON();
+    return (ctor as any).fromJSON(json);
   }
 }
 
@@ -229,6 +407,14 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
 
   get storageProvider(): StorageProvider {
     if (!this._storageProvider) {
+      // Try to get storage provider from current node context (matches Python behavior)
+      const node = getCurrentNode();
+      if (node) {
+        this._storageProvider = node.storageProvider;
+      }
+    }
+
+    if (!this._storageProvider) {
       throw new Error(
         'Storage provider is not available. Supply one via BaseAgent options or override BaseAgent.storageProvider.'
       );
@@ -301,12 +487,6 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     return `__agent_${this._name}`;
   }
 
-  private attachAgent(state: StateT): void {
-    if (typeof (state as BaseAgentState).attachAgent === 'function') {
-      (state as BaseAgentState).attachAgent(this as unknown as BaseAgent<BaseAgentState>);
-    }
-  }
-
   protected async loadStateInternal(): Promise<StateT> {
     if (this._stateCache) {
       return this._stateCache;
@@ -317,14 +497,24 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
 
     const existing = await this._stateStore!.get(this._stateKey);
     let state: StateT;
+    
     if (existing !== undefined && existing !== null) {
-      state = existing;
+      // Use fromJSON if available for validation
+      const ctor = modelType as any;
+      if (typeof ctor.fromJSON === 'function') {
+        // Serialize and deserialize to apply validation
+        // This ensures data from storage passes through validation
+        const json = JSON.stringify(existing);
+        const data = JSON.parse(json);
+        state = ctor.fromJSON(data);
+      } else {
+        state = existing;
+      }
     } else {
       state = this._stateFactory ? this._stateFactory() : new modelType();
       await this._stateStore!.set(this._stateKey, state);
     }
 
-    this.attachAgent(state);
     this._stateCache = state;
 
     return state;
@@ -333,6 +523,13 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
   protected async saveStateInternal(state: StateT): Promise<void> {
     const modelType = this.ensureStateModel();
     await this.ensureStateStore(modelType);
+    
+    // Validate state before saving if toJSON is available
+    // This triggers Zod schema validation
+    if (typeof state.toJSON === 'function') {
+      state.toJSON(); // Will throw if validation fails
+    }
+    
     await this._stateStore!.set(this._stateKey, state);
     this._stateCache = state;
   }

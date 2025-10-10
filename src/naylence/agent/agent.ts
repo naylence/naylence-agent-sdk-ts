@@ -182,11 +182,23 @@ export interface AgentRunManyOptions {
 
 export interface AgentServeOptions {
   /**
-   * Options forwarded directly to {@link FameFabric.getOrCreate}. This mirrors the Python
-   * implementation's ``**kwargs`` so existing keyword-based configurations remain compatible.
+   * Log level for the agent. Can be a string ('debug', 'info', 'warning', 'error', 'critical'),
+   * a numeric log level, or a LogLevel enum value.
    */
-  fabricOptions?: Record<string, unknown>;
   logLevel?: string | number | LogLevel | null;
+
+  /**
+   * All other options are passed directly to FameFabric.getOrCreate().
+   * This matches Python's **kwargs pattern for maximum compatibility.
+   * 
+   * Common options include:
+   * - rootConfig: Root Fame configuration
+   * - connectorConfig: Connector configuration
+   * - securityConfig: Security configuration
+   * - storageConfig: Storage configuration
+   * etc.
+   */
+  [key: string]: unknown;
 }
 
 export abstract class Agent extends RpcMixin implements FameService {
@@ -348,7 +360,8 @@ export abstract class Agent extends RpcMixin implements FameService {
   }
 
   async aserve(address: FameAddress | string, options: AgentServeOptions = {}): Promise<void> {
-    const { fabricOptions, logLevel = null } = options;
+    // Extract logLevel, pass everything else to fabric
+    const { logLevel = null, ...fabricOptions } = options;
 
     if (logLevel !== null && logLevel !== undefined) {
       const resolvedLevel = normalizeLogLevel(logLevel);

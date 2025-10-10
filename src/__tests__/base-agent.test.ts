@@ -54,9 +54,9 @@ class CounterState extends BaseAgentState {
   count = 0;
   lastAgentName: string | null = null;
 
-  increment(): void {
+  increment(agentName: string): void {
     this.count += 1;
-    this.lastAgentName = this.getAgent().name;
+    this.lastAgentName = agentName;
   }
 }
 
@@ -136,7 +136,7 @@ describe('BaseAgent', () => {
     expect(provider).toBe(storageProvider);
 
     await agent.withState(async (state) => {
-      state.increment();
+      state.increment(agent.name!);
     });
 
     const loaded = await agent.getState();
