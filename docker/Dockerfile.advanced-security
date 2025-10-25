@@ -1,0 +1,35 @@
+FROM node:24-slim
+
+# Environment settings for production
+ENV NODE_ENV=production
+
+# Create non-root user first
+RUN useradd -m -u 1000 agent
+
+WORKDIR /app
+
+# Switch to non-root user
+USER agent
+
+# Install packages globally for the user
+ARG SDK_VERSION
+ARG ADVANCED_SECURITY_VERSION
+RUN npm install -g --prefix /home/agent/.npm-global \
+    @naylence/agent-sdk${SDK_VERSION:+@${SDK_VERSION}} \
+    @naylence/advanced-security${ADVANCED_SECURITY_VERSION:+@${ADVANCED_SECURITY_VERSION}}
+
+# Add npm global bin to PATH
+ENV PATH="/home/agent/.npm-global/bin:$PATH"
+
+# Add license notice for the bundled components
+RUN mkdir -p /home/agent/licenses && \
+    echo "This image bundles multiple components with different licenses:" > /home/agent/licenses/NOTICE && \
+    echo "- @naylence/agent-sdk: Apache-2.0 License" >> /home/agent/licenses/NOTICE && \
+    echo "- @naylence/advanced-security: Business Source License (BSL-1.1)" >> /home/agent/licenses/NOTICE && \
+    echo "" >> /home/agent/licenses/NOTICE && \
+    echo "By using this image, you agree to comply with all applicable license terms." >> /home/agent/licenses/NOTICE && \
+    echo "See project repositories for full license texts:" >> /home/agent/licenses/NOTICE && \
+    echo "- https://github.com/naylence/naylence-agent-sdk-ts/blob/main/LICENSE" >> /home/agent/licenses/NOTICE && \
+    echo "- https://github.com/naylence/naylence-advanced-security" >> /home/agent/licenses/NOTICE
+
+CMD ["node", "--version"]

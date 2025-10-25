@@ -1,7 +1,7 @@
 /**
  * Naylence Agent SDK plugin entry point for the naylence-factory plugin ecosystem.
  */
-import type { FamePlugin } from 'naylence-factory';
+import type { FamePlugin } from '@naylence/factory';
 
 let initialized = false;
 
@@ -13,7 +13,7 @@ const agentSdkPlugin: FamePlugin = {
     }
 
     initialized = true;
-    
+
     // The agent SDK primarily provides types, base classes, and utilities.
     // It doesn't register factories like the runtime package does.
     // The side-effect import of agent-proxy-default.js in index.ts

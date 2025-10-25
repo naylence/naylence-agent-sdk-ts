@@ -1,5 +1,5 @@
 {
-  "name": "naylence-agent-sdk",
+  "name": "@naylence/agent-sdk",
   "version": "0.1.0",
   "type": "module",
   "description": "Naylence Agent SDK - TypeScript port of the Python agent orchestration toolkit",
@@ -42,6 +42,10 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "npm run clean && npm run build:types && npm run build:cjs && npm run build:esm && npm run build:browser",
     "build:types": "tsc --emitDeclarationOnly --outDir dist/types",
@@ -59,9 +63,7 @@
     "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
-    "naylence-core": "file:../naylence-core-ts",
-    "naylence-factory": "file:../naylence-factory-ts",
-    "naylence-runtime": "file:../naylence-runtime-ts",
+    "@naylence/runtime": "^0.1.0",
     "zod": "^4.1.11"
   },
   "peerDependencies": {

@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from '@jest/globals';
-import { DataFrame } from 'naylence-core';
+import { DataFrame } from '@naylence/core';
 import {
   DataPartSchema,
   MessageSchema,

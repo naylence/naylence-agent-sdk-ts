@@ -6,7 +6,7 @@ import {
   type Payload,
   type Targets,
 } from '../naylence/agent/agent.js';
-import * as runtime from 'naylence-runtime';
+import * as runtime from '@naylence/runtime';
 import { TaskSendParamsSchema } from '../naylence/agent/a2a-types.js';
 import type { TaskSendParams, TaskQueryParams } from '../naylence/agent/a2a-types.js';
 // Import to register default agent proxy factory
@@ -206,7 +206,7 @@ describe('Agent', () => {
       return `${payload}:${id}`;
     });
 
-  const agent = await Agent.fromHandler(handler);
+    const agent = await Agent.fromHandler(handler);
 
     const params: TaskSendParams = TaskSendParamsSchema.parse({
       id: 'task-1',
@@ -247,7 +247,7 @@ describe('Agent', () => {
   });
 
   it('serves agents and configures logging', async () => {
-  const agent = await Agent.fromHandler(async () => 'done');
+    const agent = await Agent.fromHandler(async () => 'done');
 
     const basicConfigSpy = jest.spyOn(runtime, 'basicConfig').mockImplementation(() => undefined);
 

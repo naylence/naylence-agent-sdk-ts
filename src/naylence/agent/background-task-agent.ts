@@ -1,4 +1,4 @@
-import { AsyncLock, getLogger } from 'naylence-runtime';
+import { AsyncLock, getLogger } from '@naylence/runtime';
 
 import {
   type Artifact,
@@ -20,7 +20,7 @@ import {
 } from './base-agent.js';
 import { makeMessage } from './util.js';
 
-const logger = getLogger('naylence.agent.background-task-agent');
+const logger = getLogger('naylence.agent.background_task_agent');
 
 const DEFAULT_EVENT_QUEUE_SIZE = 1000;
 const END_OF_STREAM_SENTINEL: TaskStatusUpdateEvent = Object.freeze({

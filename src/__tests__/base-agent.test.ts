@@ -4,8 +4,8 @@ import {
   type FameEnvelope,
   type FameMessageResponse,
   type JSONRPCResponse,
-} from 'naylence-core';
-import * as runtime from 'naylence-runtime';
+} from '@naylence/core';
+import * as runtime from '@naylence/runtime';
 import { BaseAgent, BaseAgentState } from '../naylence/agent/base-agent.js';
 import {
   TaskState,
@@ -23,7 +23,7 @@ import {
   TaskNotCancelableException,
   UnsupportedOperationException,
 } from '../naylence/agent/errors.js';
-import type { StorageProvider } from 'naylence-runtime';
+import type { StorageProvider } from '@naylence/runtime';
 
 const { FameAddress, FameFabric, InMemoryStorageProvider } = runtime;
 

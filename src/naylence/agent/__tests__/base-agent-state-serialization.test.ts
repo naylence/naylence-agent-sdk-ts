@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { BaseAgent, BaseAgentState } from '../base-agent';
-import { InMemoryStorageProvider } from 'naylence-runtime';
+import { InMemoryStorageProvider } from '@naylence/runtime';
 
 // Test state without schema (uses default z.any())
 class SimpleState extends BaseAgentState {
@@ -17,11 +17,11 @@ const ValidatedStateSchema = z.object({
 
 class ValidatedState extends BaseAgentState {
   static readonly schema = ValidatedStateSchema;
-  
+
   count: number = 0;
   items: string[] = [];
   lastUpdated?: string;
-  
+
   // Don't override toJSON - let base class handle validation
 }
 
@@ -39,10 +39,10 @@ const NestedStateSchema = z.object({
 
 class NestedState extends BaseAgentState {
   static readonly schema = NestedStateSchema;
-  
+
   items: Array<{ id: string; name: string; quantity: number }> = [];
   totalValue: number = 0;
-  
+
   // Don't override toJSON - let base class handle validation
 }
 
@@ -95,7 +95,7 @@ describe('BaseAgentState - Serialization', () => {
       agent._stateCache = null;
 
       const loaded = await agent.getState();
-      
+
       expect(loaded.count).toBe(100);
       expect(loaded.items).toEqual(['a', 'b', 'c']);
     });
@@ -132,7 +132,7 @@ describe('BaseAgentState - Serialization', () => {
 
       await Promise.all(promises);
       const final = await agent.getState();
-      
+
       expect(final.count).toBe(10);
     });
   });
@@ -276,21 +276,21 @@ describe('BaseAgentState - Validation', () => {
         s.count = 42;
         s.items = ['valid'];
       });
-      
+
       // Access the internal state store that the agent is using
       // @ts-expect-error - accessing private field for testing
       const agentStore = validatedAgent._stateStore;
       expect(agentStore).toBeDefined();
       if (!agentStore) throw new Error('Store not initialized');
-      
+
       // Verify the valid state is there
       const validData = await agentStore.get('state');
       expect(validData).toBeDefined();
       expect((validData as any).count).toBe(42);
-      
+
       // Corrupt it with invalid data directly in the agent's store
       await agentStore.set('state', { count: 'not a number', items: [] } as any);
-      
+
       // Verify corruption
       const corruptedData = await agentStore.get('state');
       expect((corruptedData as any).count).toBe('not a number');
@@ -319,9 +319,7 @@ describe('BaseAgentState - Nested Objects', () => {
 
   test('should validate nested object structure', () => {
     const state = new NestedState();
-    state.items = [
-      { id: '123e4567-e89b-12d3-a456-426614174000', name: 'Widget', quantity: 5 },
-    ];
+    state.items = [{ id: '123e4567-e89b-12d3-a456-426614174000', name: 'Widget', quantity: 5 }];
     state.totalValue = 100;
 
     expect(() => state.toJSON()).not.toThrow();
@@ -329,9 +327,7 @@ describe('BaseAgentState - Nested Objects', () => {
 
   test('should reject invalid nested UUID', () => {
     const state = new NestedState();
-    state.items = [
-      { id: 'not-a-uuid', name: 'Widget', quantity: 5 },
-    ];
+    state.items = [{ id: 'not-a-uuid', name: 'Widget', quantity: 5 }];
 
     expect(() => state.toJSON()).toThrow(/Failed to serialize/);
     expect(() => state.toJSON()).toThrow(/id/);
@@ -339,9 +335,7 @@ describe('BaseAgentState - Nested Objects', () => {
 
   test('should reject invalid nested quantity', () => {
     const state = new NestedState();
-    state.items = [
-      { id: '123e4567-e89b-12d3-a456-426614174000', name: 'Widget', quantity: 0 },
-    ];
+    state.items = [{ id: '123e4567-e89b-12d3-a456-426614174000', name: 'Widget', quantity: 0 }];
 
     expect(() => state.toJSON()).toThrow(/Failed to serialize/);
     expect(() => state.toJSON()).toThrow(/quantity/);
@@ -349,9 +343,7 @@ describe('BaseAgentState - Nested Objects', () => {
 
   test('should reject empty name in nested object', () => {
     const state = new NestedState();
-    state.items = [
-      { id: '123e4567-e89b-12d3-a456-426614174000', name: '', quantity: 5 },
-    ];
+    state.items = [{ id: '123e4567-e89b-12d3-a456-426614174000', name: '', quantity: 5 }];
 
     expect(() => state.toJSON()).toThrow(/Failed to serialize/);
   });
@@ -368,7 +360,7 @@ describe('BaseAgentState - Nested Objects', () => {
     // Clear cache to force reload from storage
     // @ts-expect-error - accessing private field for testing
     nestedAgent._stateCache = null;
-    
+
     const loaded = await nestedAgent.getState();
 
     expect(loaded.items).toHaveLength(2);
@@ -399,9 +391,7 @@ describe('BaseAgentState - clone()', () => {
 
   test('should create deep copy for nested objects', () => {
     const state = new NestedState();
-    state.items = [
-      { id: '123e4567-e89b-12d3-a456-426614174000', name: 'Widget', quantity: 5 },
-    ];
+    state.items = [{ id: '123e4567-e89b-12d3-a456-426614174000', name: 'Widget', quantity: 5 }];
 
     const cloned = state.clone();
     cloned.items[0].quantity = 10;

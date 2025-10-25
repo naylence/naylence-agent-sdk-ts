@@ -7,7 +7,7 @@ import {
   JSONRPCResponse,
   JSONRPCResponseSchema,
   generateId,
-} from 'naylence-core';
+} from '@naylence/core';
 
 type Metadata = Record<string, any>;
 

@@ -1,7 +1,7 @@
 export const SENTINEL_PORT = 8000;
 
 export const CLIENT_CONFIG = {
-  plugins: ['naylence-runtime'],
+  plugins: ['@naylence/runtime'],
   node: {
     security: {
       type: 'SecurityProfile' as const,
@@ -23,7 +23,7 @@ export const CLIENT_CONFIG = {
 } as const;
 
 export const NODE_CONFIG = {
-  plugins: ['naylence-runtime'],
+  plugins: ['@naylence/runtime'],
   node: {
     type: 'Node',
     id: '${env:FAME_NODE_ID:}',
@@ -49,7 +49,7 @@ export const NODE_CONFIG = {
 } as const;
 
 export const SENTINEL_CONFIG = {
-  plugins: ['naylence-runtime'],
+  plugins: ['@naylence/runtime'],
   node: {
     type: 'Sentinel',
     id: '${env:FAME_NODE_ID:}',

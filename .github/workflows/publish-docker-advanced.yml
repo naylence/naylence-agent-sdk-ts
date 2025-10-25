@@ -1,0 +1,178 @@
+name: Build and Push Advanced Security Docker Image
+
+on:
+  push:
+    tags: [ 'v*' ]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      adv_version:
+        description: '@naylence/advanced-security version (required for manual builds)'
+        required: true
+        type: string
+  workflow_run:
+    workflows: ["Publish to npm"]
+    types:
+      - completed
+    branches: [ main ]
+
+env:
+  DOCKERHUB_REGISTRY: docker.io
+  DOCKERHUB_IMAGE: naylence/agent-sdk-adv-node
+
+jobs:
+  build-and-push-adv:
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name != 'workflow_run' || 
+      github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Extract SDK version from package.json
+      id: get_versions
+      run: |
+        SDK_VERSION=$(node -p "require('./package.json').version")
+        echo "sdk_version=$SDK_VERSION" >> $GITHUB_OUTPUT
+        echo "Extracted SDK version: $SDK_VERSION"
+
+    - name: Determine advanced security version
+      id: get_adv_version
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          # For manual dispatch, use the provided version
+          ADV_VERSION="${{ github.event.inputs.adv_version }}"
+          echo "Using manually specified advanced security version: $ADV_VERSION"
+        else
+          # For automatic triggers, try multiple fallback options
+          ADV_VERSION=""
+          
+          # Option 1: Try repository variable
+          if [[ -n "${{ vars.ADVANCED_SECURITY_VERSION }}" ]]; then
+            ADV_VERSION="${{ vars.ADVANCED_SECURITY_VERSION }}"
+            echo "Using repository variable advanced security version: $ADV_VERSION"
+          else
+            # Option 2: Fetch latest from npm
+            echo "Fetching latest @naylence/advanced-security version from npm..."
+            ADV_VERSION=$(npm view @naylence/advanced-security version 2>/dev/null || echo "")
+            if [ -n "$ADV_VERSION" ]; then
+              echo "Found latest advanced security version: $ADV_VERSION"
+            fi
+          fi
+          
+          if [ -z "$ADV_VERSION" ]; then
+            echo "❌ Could not determine @naylence/advanced-security version"
+            echo "Options to fix this:"
+            echo "1. Set repository variable ADVANCED_SECURITY_VERSION"
+            echo "2. Use workflow_dispatch with manual version"
+            echo "3. Ensure @naylence/advanced-security is published to npm"
+            exit 1
+          fi
+        fi
+        echo "adv_version=$ADV_VERSION" >> $GITHUB_OUTPUT
+        echo "Advanced Security version: $ADV_VERSION"
+
+    - name: Validate version consistency
+      run: |
+        PACKAGE_VERSION=${{ steps.get_versions.outputs.sdk_version }}
+        if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          GIT_TAG_VERSION=${{ github.ref_name }}
+          GIT_TAG_VERSION=${GIT_TAG_VERSION#v}
+          echo "🏷️  Git tag version: $GIT_TAG_VERSION"
+          echo "📦 package.json version: $PACKAGE_VERSION"
+          [ "$GIT_TAG_VERSION" = "$PACKAGE_VERSION" ] || {
+            echo "❌ Git tag and package.json version mismatch"; exit 1; }
+          echo "✅ Git tag and package.json versions are in sync"
+        else
+          echo "ℹ️  Not a git tag trigger, using package.json version: $PACKAGE_VERSION"
+          if git tag --list | grep -q "^v${PACKAGE_VERSION}$"; then
+            echo "✅ Found matching git tag: v$PACKAGE_VERSION"
+          else
+            echo "⚠️  WARNING: No matching git tag found for version $PACKAGE_VERSION"
+          fi
+        fi
+
+    - name: Wait for packages on npm
+      if: github.event_name == 'workflow_run' || github.event_name == 'release'
+      run: |
+        SDK_VERSION=${{ steps.get_versions.outputs.sdk_version }}
+        ADV_VERSION=${{ steps.get_adv_version.outputs.adv_version }}
+        TIMEOUT=180; SLEEP=10; ELAPSED=0
+        echo "Waiting for @naylence/agent-sdk@$SDK_VERSION and @naylence/advanced-security@$ADV_VERSION..."
+        while [ $ELAPSED -lt $TIMEOUT ]; do
+          SDK_OK=$(npm view @naylence/agent-sdk@$SDK_VERSION version 2>/dev/null | grep -q "$SDK_VERSION" && echo 1 || echo 0)
+          ADV_OK=$(npm view @naylence/advanced-security@$ADV_VERSION version 2>/dev/null | grep -q "$ADV_VERSION" && echo 1 || echo 0)
+          if [ $SDK_OK -eq 1 ] && [ $ADV_OK -eq 1 ]; then
+            echo "✅ Packages found on npm"; break
+          fi
+          echo "⏳ Not yet available, waiting ${SLEEP}s..."
+          sleep $SLEEP; ELAPSED=$((ELAPSED + SLEEP))
+        done
+        if [ $ELAPSED -ge $TIMEOUT ]; then
+          echo "⚠️  Timeout waiting for packages; proceeding (build may fail if unavailable)"
+        fi
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.DOCKERHUB_REGISTRY }}
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Generate Docker tags
+      id: tags
+      run: |
+        VERSION=${{ steps.get_versions.outputs.sdk_version }}
+        IMAGE=${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE }}
+        TAGS="${IMAGE}:${VERSION}"
+        if [[ "${{ github.event_name }}" == "release" ]] || \
+           [[ "${{ github.event_name }}" == "workflow_run" ]] || \
+           [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          TAGS="${TAGS},${IMAGE}:latest"
+        fi
+        if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          MAJOR=$(echo $VERSION | cut -d. -f1)
+          MINOR=$(echo $VERSION | cut -d. -f1-2)
+          TAGS="${TAGS},${IMAGE}:${MAJOR},${IMAGE}:${MINOR}"
+        fi
+        echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+        echo "Generated tags: ${TAGS}"
+
+    - name: Build and push Docker image (Advanced)
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./docker/Dockerfile.advanced-security
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.tags.outputs.tags }}
+        labels: |
+          org.opencontainers.image.title=@naylence/agent-sdk-adv-node
+          org.opencontainers.image.description=Naylence Agent SDK (Node.js, advanced security build). Includes @naylence/advanced-security.
+          org.opencontainers.image.version=${{ steps.get_versions.outputs.sdk_version }}
+          org.opencontainers.image.licenses=Apache-2.0 AND BSL-1.1
+          org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          org.opencontainers.image.revision=${{ github.sha }}
+          org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+        build-args: |
+          SDK_VERSION=${{ steps.get_versions.outputs.sdk_version }}
+          ADVANCED_SECURITY_VERSION=${{ steps.get_adv_version.outputs.adv_version }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Update Docker Hub description (Advanced)
+      uses: peter-evans/dockerhub-description@v4
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        repository: ${{ env.DOCKERHUB_IMAGE }}
+        readme-filepath: ./docker/README.advanced-security.md

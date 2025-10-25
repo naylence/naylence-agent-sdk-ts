@@ -1,5 +1,5 @@
-import { DataFrame } from 'naylence-core';
-import type { FameMessageResponse } from 'naylence-core';
+import { DataFrame } from '@naylence/core';
+import type { FameMessageResponse } from '@naylence/core';
 import {
   DataPart,
   DataPartSchema,

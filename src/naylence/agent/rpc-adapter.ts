@@ -1,4 +1,9 @@
-import { JSONRPCError, JSONRPCRequest, JSONRPCRequestSchema, JSONRPCResponse } from 'naylence-core';
+import {
+  JSONRPCError,
+  JSONRPCRequest,
+  JSONRPCRequestSchema,
+  JSONRPCResponse,
+} from '@naylence/core';
 import {
   A2ARequestSchema,
   InternalError,

@@ -1,4 +1,4 @@
-import { JSONRPCRequestSchema, type JSONRPCResponse } from 'naylence-core';
+import { JSONRPCRequestSchema, type JSONRPCResponse } from '@naylence/core';
 import { handleAgentRpcRequest } from '../naylence/agent/rpc-adapter.js';
 import { makeTask, makeTaskParams } from '../naylence/agent/util.js';
 import {

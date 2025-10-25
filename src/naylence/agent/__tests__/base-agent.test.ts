@@ -6,14 +6,14 @@ import {
   type FameMessageResponse,
   type DeliveryAckFrame,
   type JSONRPCResponse,
-} from 'naylence-core';
+} from '@naylence/core';
 import {
   FameAddress,
   FameFabric,
   InMemoryStorageProvider,
   type KeyValueStore,
   type StorageProvider,
-} from 'naylence-runtime';
+} from '@naylence/runtime';
 import type { AgentCard, Task, TaskSendParams, TaskQueryParams } from '../a2a-types.js';
 import {
   TaskState,

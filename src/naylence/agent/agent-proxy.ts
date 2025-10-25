@@ -1,6 +1,6 @@
-import { FameAddress, generateId, createRpcProxy } from 'naylence-runtime';
-import type { FameFabric } from 'naylence-runtime';
-import type { FameEnvelope } from 'naylence-core';
+import { FameAddress, generateId, createRpcProxy } from '@naylence/runtime';
+import type { FameFabric } from '@naylence/runtime';
+import type { FameEnvelope } from '@naylence/core';
 import {
   type AgentCard,
   type AuthenticationInfo,
@@ -199,9 +199,7 @@ export class AgentProxy<TAgent extends Agent = Agent> extends Agent {
     let status: TaskStatus = task.status;
 
     if (!TERMINAL_TASK_STATES.has(status.state)) {
-      const updates = this.subscribeToTaskUpdates(
-        makeTaskParams({ id: taskId, payload: null })
-      );
+      const updates = this.subscribeToTaskUpdates(makeTaskParams({ id: taskId, payload: null }));
       const iterator = updates[Symbol.asyncIterator]();
 
       try {
@@ -462,11 +460,7 @@ export class AgentProxy<TAgent extends Agent = Agent> extends Agent {
 
     if (this.targetCapabilities) {
       if (options.streaming) {
-        return await this.fabric.invokeByCapabilityStream(
-          this.targetCapabilities,
-          method,
-          payload
-        );
+        return await this.fabric.invokeByCapabilityStream(this.targetCapabilities, method, payload);
       }
       return await this.fabric.invokeByCapability(this.targetCapabilities, method, payload);
     }

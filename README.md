@@ -1,66 +1,140 @@
+[![Join our Discord](https://img.shields.io/badge/Discord-Join%20Chat-blue?logo=discord)](https://discord.gg/nwZAeqdv7y)
+
 # Naylence Agent SDK (TypeScript)
 
-> 🚧 **Work in progress.** This package is the TypeScript port of the Naylence Agent SDK. The initial commit lays down the build tooling, testing harness, and project structure so we can begin migrating features from the Python implementation.
+The **Naylence Agent SDK** is the official toolkit for building agents and clients on the Naylence Agentic Fabric. It gives you a clean, typed, async-first API for composing tasks, streaming results, and wiring agents together—locally or across a distributed fabric.
 
-## Goals
+> If you're new to Naylence, start here. For lower‑level transport/fabric internals, see **@naylence/runtime**.
 
-- Provide a cross-platform agent orchestration toolkit that mirrors the Python SDK feature set.
-- Integrate cleanly with the Naylence Fame runtime, factories, and core protocol packages.
-- Offer typed APIs, cancellable async task helpers, and structured logging aligned with the Naylence platform conventions.
+---
 
-## Repository Layout
+## Highlights
 
-```
-src/
-  index.ts          # Primary library entry point (re-exports agent modules)
-  browser.ts        # Browser-friendly bundle entry
-  naylence/agent/   # Feature modules (placeholders for now)
+* **Ergonomic agent model** — subclass `BaseAgent` (one-shot) or `BackgroundTaskAgent` (long‑running/streaming) and focus on your logic.
+* **Typed messages & tasks** — Zod models for `Task`, `Message`, `Artifact`, and JSON‑RPC A2A operations.
+* **Async all the way** — non‑blocking lifecycle with easy scatter‑gather helpers (`Agent.broadcast`, `Agent.runMany`).
+* **Remote proxies** — call agents by **address** or **capabilities** via `Agent.remote*` helpers.
+* **Streaming & cancellation** — subscribe to live status/artifacts; cancel in‑flight work.
+* **FastAPI integration** — drop‐in JSON‑RPC router (`createAgentRouter`) and `/agent.json` metadata endpoint.
+* **Security ready** — works with runtime security profiles; **strict‑overlay** requires the `@naylence/advanced‑security` add‑on.
 
-__tests__/          # Jest tests (populate during feature porting)
-test/setup.ts       # Shared Jest setup hook
-```
+---
 
-## Development Scripts
-
-All commands are defined in `package.json`:
-
-- `npm run build` – Clean, type-check, and emit CJS/ESM/UMD bundles.
-- `npm test` – Run the Jest suite with `ts-jest` in ESM mode.
-- `npm run lint` / `npm run lint:fix` – ESLint with TypeScript rules.
-- `npm run format` – Prettier formatting helpers.
-- `npm run dev` – ESM compile-on-save loop for rapid development.
-
-> **Tip:** Run `npm install` inside `naylence-agent-sdk-ts` before executing any scripts. The project expects Node.js 18+.
-
-## Configuration helpers
-
-The SDK now ships with `CLIENT_CONFIG`, `NODE_CONFIG`, and `SENTINEL_CONFIG` objects under `naylence/agent/configs`. These mirror the Python defaults and keep environment placeholder strings such as `${env:FAME_STORAGE_PROFILE:memory}` so you can hydrate values the same way across runtimes. Import them via:
-
-```ts
-import { CLIENT_CONFIG, NODE_CONFIG, SENTINEL_CONFIG } from "naylence-agent-sdk/naylence/agent/configs";
-```
-
-## Quickstart example
-
-The `examples/quickstart/hello.mjs` script demonstrates serving a minimal `BaseAgent` implementation and invoking it through a remote proxy. Run it after installing dependencies (the `FAME_PLUGINS` variable enables the in-memory runtime used by the script):
+## Install
 
 ```bash
-npm install
-FAME_PLUGINS=naylence-runtime node examples/quickstart/hello.mjs
+npm install @naylence/agent-sdk
 ```
 
-The example spins up an in-process `FameFabric`, serves an `EchoAgent` that overrides `runTask`, obtains a proxy via `Agent.remoteByAddress`, and prints the response returned by `runTask`.
+> Node.js **18+** is required.
 
-## API naming
+---
 
-The TypeScript SDK exposes camelCase APIs such as `runTask`, `startTask`, `subscribeToTaskUpdates`, and `remoteByAddress`. Snake_case variants have been fully removed—update any callers that still rely on `run_task`-style helpers to use the camelCase equivalents.
+## Quickstart (minimal)
 
-## Next Steps
+```javascript
+import { withFabric } from '@naylence/runtime';
+import { Agent, BaseAgent } from '@naylence/agent-sdk';
 
-- Port agent abstractions (`BaseAgent`, `BackgroundTaskAgent`, etc.) from the Python SDK.
-- Add integration glue with the runtime, factory, and core packages.
-- Flesh out unit and integration tests that mirror the Python coverage.
+class EchoAgent extends BaseAgent {
+  async runTask(payload) {
+    return payload;
+  }
+}
 
-## License
+async function main() {
+  await withFabric(async (fabric) => {
+    const agentAddress = await fabric.serve(new EchoAgent());
+    console.log(`Agent is listening at address: ${agentAddress}`);
+    const remoteAgent = Agent.remoteByAddress(agentAddress);
+    const result = await remoteAgent.runTask('Hello, World!');
+    console.log(result);
+  });
+}
 
-Licensed under the [Apache 2.0](./LICENSE) license. See the NOTICE file in the root repository for attribution details.
+main().catch((error) => {
+  console.error('quickstart example failed', error);
+  process.exitCode = 1;
+});
+```
+
+For a gentle, runnable tour—from single‑process to distributed orchestration—use the **Examples** repo: [https://github.com/naylence/naylence-examples-ts](https://github.com/naylence/naylence-examples-ts).
+
+---
+
+## Core concepts
+
+**Agents & tasks**
+
+* Implement `runTask(payload, id)` for simple one‑shot work, or override `startTask(...)`/`getTaskStatus(...)` for background jobs.
+* `Message.parts` carries either text (`TextPart`) or structured data (`DataPart`).
+* Long‑running flows stream `TaskStatusUpdateEvent` and `TaskArtifactUpdateEvent` until terminal (`COMPLETED`/`FAILED`/`CANCELED`).
+
+**Remote proxies**
+
+* `Agent.remoteByAddress("echo@fame.fabric")` to call a known address.
+* `Agent.remoteByCapabilities(["agent"])` to call by capability (fabric does resolution).
+
+**Streaming & cancel**
+
+* `subscribeToTaskUpdates(...)` yields status/artifacts live.
+* `cancelTask(...)` requests cooperative cancellation when supported by the agent.
+
+**RPC operations**
+
+* A2A JSON‑RPC methods (`tasks/send`, `.../get`, `.../cancel`, etc.) are provided for task lifecycle.
+* Custom functions can be exposed via the RPC mixin in the underlying fabric (e.g., streaming operations).
+
+**FastAPI router**
+
+* Use `createAgentRouter(agent)` to expose a JSON‑RPC endpoint (default: `/fame/v1/jsonrpc`) and `GET /agent.json` to return an `AgentCard`.
+
+---
+
+## Choosing an agent base class
+
+* **`BaseAgent`** — great for synchronous/short tasks; the default fallback packages your return value into a `Task(COMPLETED)`.
+* **`BackgroundTaskAgent`** — best for long‑running/streaming work. You implement `runBackgroundTask(...)`; the base manages queues, TTLs, and end‑of‑stream.
+
+Both base classes include sensible defaults (poll‑based streaming, simple auth pass‑through). You can override any part of the lifecycle.
+
+---
+
+## Development workflow
+
+* Add your agents in a project with the SDK.
+* Use `FameFabric.create()` in tests or local scripts to host agents in‑process.
+* For distributed setups, operate a sentinel/fabric with **@naylence/runtime** (or your infra) and connect agents remotely.
+* Use the **Examples** repo ([https://github.com/naylence/naylence-examples-ts](https://github.com/naylence/naylence-examples-ts)) to learn patterns like scatter‑gather, RPC streaming, cancellation, and security tiers.
+
+---
+
+## Security notes
+
+The SDK runs on the Naylence fabric's security profiles:
+
+* **direct / gated / overlay** modes work out‑of‑the‑box with the open‑source stack.
+* **strict‑overlay** (sealed overlay encryption + SPIFFE/X.509 identities) is available **only** with the **`@naylence/advanced‑security`** package.
+
+See repo links below for the advanced add‑on and images that bundle it.
+
+---
+
+## Links
+
+* **Agent SDK (this repo):** [https://github.com/naylence/naylence-agent-sdk-ts](https://github.com/naylence/naylence-agent-sdk-ts)
+* **Examples (TypeScript):** [https://github.com/naylence/naylence-examples-ts](https://github.com/naylence/naylence-examples-ts)
+* **Runtime (fabric & transports):** [https://github.com/naylence/naylence-runtime-ts](https://github.com/naylence/naylence-runtime-ts)
+* **Advanced Security add‑on:** [https://github.com/naylence/naylence-advanced-security-ts](https://github.com/naylence/naylence-advanced-security-ts)
+
+Docker images:
+
+* OSS: `naylence/agent-sdk-node`
+* Advanced: `naylence/agent-sdk-adv-node` (includes `@naylence/advanced-security`; BSL-licensed add-on)
+
+---
+
+## License & support
+
+* **License:** Apache‑2.0 (SDK).&#x20;
+* **Issues:** please use the appropriate GitHub repo (SDK, Runtime, Examples, Advanced Security).

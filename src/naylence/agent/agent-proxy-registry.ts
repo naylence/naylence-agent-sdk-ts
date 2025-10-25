@@ -1,16 +1,10 @@
-import type { FameAddress, FameFabric } from 'naylence-runtime';
+import type { FameAddress, FameFabric } from '@naylence/runtime';
 import type { Agent } from './agent.js';
 import type { AgentProxy } from './agent-proxy.js';
 
 export interface AgentProxyConstructor<TAgent extends Agent> {
-  remoteByAddress(
-    address: FameAddress,
-    options: { fabric: FameFabric }
-  ): AgentProxy<TAgent>;
-  remoteByCapabilities(
-    capabilities: string[],
-    options: { fabric: FameFabric }
-  ): AgentProxy<TAgent>;
+  remoteByAddress(address: FameAddress, options: { fabric: FameFabric }): AgentProxy<TAgent>;
+  remoteByCapabilities(capabilities: string[], options: { fabric: FameFabric }): AgentProxy<TAgent>;
 }
 
 let registeredAgentProxyCtor: AgentProxyConstructor<Agent> | null = null;

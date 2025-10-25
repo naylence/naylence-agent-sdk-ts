@@ -1,0 +1,189 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    tags: [ 'v*' ]
+  release:
+    types: [published]
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Publish to npm"]
+    types:
+      - completed
+    branches: [ main ]
+
+env:
+  DOCKERHUB_REGISTRY: docker.io
+  GHCR_REGISTRY: ghcr.io
+  DOCKERHUB_IMAGE: naylence/agent-sdk-node
+  GHCR_IMAGE: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    # Only run if:
+    # 1. Manual trigger, tags, or release
+    # 2. OR workflow_run trigger AND the npm workflow succeeded
+    if: |
+      github.event_name != 'workflow_run' || 
+      github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Extract version from package.json
+      id: get_version
+      run: |
+        VERSION=$(node -p "require('./package.json').version")
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Extracted version: $VERSION"
+
+    - name: Validate version consistency
+      run: |
+        PACKAGE_VERSION=${{ steps.get_version.outputs.version }}
+        
+        # Check if this is a git tag trigger
+        if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          GIT_TAG_VERSION="${{ github.ref_name }}"
+          # Remove 'v' prefix if present
+          GIT_TAG_VERSION=${GIT_TAG_VERSION#v}
+          
+          echo "🏷️  Git tag version: $GIT_TAG_VERSION"
+          echo "📦 package.json version: $PACKAGE_VERSION"
+          
+          if [[ "$GIT_TAG_VERSION" != "$PACKAGE_VERSION" ]]; then
+            echo "❌ ERROR: Git tag version ($GIT_TAG_VERSION) doesn't match package.json version ($PACKAGE_VERSION)"
+            echo "Please ensure the git tag matches the version in package.json"
+            exit 1
+          else
+            echo "✅ Git tag and package.json versions are in sync"
+          fi
+        else
+          echo "ℹ️  Not a git tag trigger, using package.json version: $PACKAGE_VERSION"
+          
+          # Check if a matching tag exists
+          if git tag --list | grep -q "^v${PACKAGE_VERSION}$"; then
+            echo "✅ Found matching git tag: v$PACKAGE_VERSION"
+          else
+            echo "⚠️  WARNING: No matching git tag found for version $PACKAGE_VERSION"
+            echo "Consider creating a git tag: git tag v$PACKAGE_VERSION"
+          fi
+        fi
+
+    - name: Wait for npm package availability
+      if: github.event_name == 'workflow_run' || github.event_name == 'release'
+      run: |
+        VERSION=${{ steps.get_version.outputs.version }}
+        echo "Waiting for @naylence/agent-sdk@$VERSION to be available on npm..."
+        
+        TIMEOUT=120  # 2 minutes
+        ELAPSED=0
+        SLEEP_INTERVAL=10
+        
+        while [ $ELAPSED -lt $TIMEOUT ]; do
+          echo "Checking npm availability (attempt $((ELAPSED/SLEEP_INTERVAL + 1)))..."
+          
+          # Check if package version exists
+          if npm view @naylence/agent-sdk@$VERSION version 2>/dev/null | grep -q "$VERSION"; then
+            echo "✅ Package @naylence/agent-sdk@$VERSION found on npm!"
+            break
+          fi
+          
+          echo "⏳ Package not yet available, waiting ${SLEEP_INTERVAL}s..."
+          sleep $SLEEP_INTERVAL
+          ELAPSED=$((ELAPSED + SLEEP_INTERVAL))
+        done
+        
+        if [ $ELAPSED -ge $TIMEOUT ]; then
+          echo "❌ Timeout: Package @naylence/agent-sdk@$VERSION not found after ${TIMEOUT}s"
+          echo "Proceeding anyway - Docker build will fail if package is not available"
+        fi
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.DOCKERHUB_REGISTRY }}
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    # - name: Log in to GitHub Container Registry
+    #   uses: docker/login-action@v3
+    #   with:
+    #     registry: ${{ env.GHCR_REGISTRY }}
+    #     username: ${{ github.actor }}
+    #     password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Generate Docker tags
+      id: tags
+      run: |
+        VERSION=${{ steps.get_version.outputs.version }}
+        IMAGE=${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE }}
+        
+        # Always include version tag
+        TAGS="${IMAGE}:${VERSION}"
+        
+        # Add latest tag for releases, tags, or workflow_run events
+        if [[ "${{ github.event_name }}" == "release" ]] || \
+           [[ "${{ github.event_name }}" == "workflow_run" ]] || \
+           [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          TAGS="${TAGS},${IMAGE}:latest"
+        fi
+        
+        # Add semantic version tags if version follows semver pattern (e.g., 0.1.14)
+        if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          MAJOR=$(echo $VERSION | cut -d. -f1)
+          MINOR=$(echo $VERSION | cut -d. -f1-2)
+          TAGS="${TAGS},${IMAGE}:${MAJOR},${IMAGE}:${MINOR}"
+        fi
+        
+        echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+        echo "Generated tags: ${TAGS}"
+
+    # - name: Extract metadata for GHCR
+    #   id: meta-ghcr
+    #   uses: docker/metadata-action@v5
+    #   with:
+    #     images: ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE }}
+    #     tags: |
+    #       type=ref,event=branch
+    #       type=ref,event=pr
+    #       type=semver,pattern={{version}}
+    #       type=semver,pattern={{major}}.{{minor}}
+    #       type=semver,pattern={{major}}
+    #       type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./docker/Dockerfile
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.tags.outputs.tags }}
+        labels: |
+          org.opencontainers.image.title=@naylence/agent-sdk
+          org.opencontainers.image.description=Naylence Agent SDK (Node.js)
+          org.opencontainers.image.version=${{ steps.get_version.outputs.version }}
+          org.opencontainers.image.licenses=Apache-2.0
+          org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          org.opencontainers.image.revision=${{ github.sha }}
+          org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+        build-args: |
+          SDK_VERSION=${{ steps.get_version.outputs.version }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Update Docker Hub description
+      uses: peter-evans/dockerhub-description@v4
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        repository: ${{ env.DOCKERHUB_IMAGE }}
+        readme-filepath: ./README.md

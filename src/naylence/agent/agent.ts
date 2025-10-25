@@ -6,9 +6,9 @@ import {
   generateId,
   getLogger,
   LogLevel,
-} from 'naylence-runtime';
-import { RpcMixin } from 'naylence-runtime';
-import type { FameService } from 'naylence-core';
+} from '@naylence/runtime';
+import { RpcMixin } from '@naylence/runtime';
+import type { FameService } from '@naylence/core';
 import type {
   AgentCard,
   AuthenticationInfo,
@@ -33,7 +33,6 @@ export type Payload = Record<string, unknown> | string | null;
 export type Targets = Iterable<readonly [FameAddress | string, Payload]>;
 
 type AgentTaskHandler = (payload: Payload, id: string | null) => unknown | Promise<unknown>;
-
 
 export type BaseAgentConstructor = new (name?: string | null, options?: any) => BaseAgent;
 
@@ -158,11 +157,7 @@ function toFameAddress(value: FameAddress | string): FameAddress {
   return value instanceof FameAddress ? value : new FameAddress(String(value));
 }
 
-function invokeProxyRunTask(
-  proxy: Agent,
-  payload: Payload,
-  taskId: string
-): Promise<any> {
+function invokeProxyRunTask(proxy: Agent, payload: Payload, taskId: string): Promise<any> {
   if (typeof proxy.runTask === 'function') {
     return proxy.runTask(payload, taskId);
   }
@@ -190,7 +185,7 @@ export interface AgentServeOptions {
   /**
    * All other options are passed directly to FameFabric.getOrCreate().
    * This matches Python's **kwargs pattern for maximum compatibility.
-   * 
+   *
    * Common options include:
    * - rootConfig: Root Fame configuration
    * - connectorConfig: Connector configuration
@@ -396,4 +391,3 @@ export abstract class Agent extends RpcMixin implements FameService {
     return this.aserve(address, options);
   }
 }
-
