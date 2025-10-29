@@ -42,4 +42,4 @@ coverage-base-async/*
 dist/*
 
 AGENTS.md
-
+**/Dockerfile.local

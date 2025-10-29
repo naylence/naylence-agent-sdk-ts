@@ -28,7 +28,7 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "naylence-core": [
+      "@naylence/core": [
         "../naylence-core-ts/dist/types/index",
         "../naylence-core-ts/src/index"
       ],
@@ -36,7 +36,7 @@
         "../naylence-core-ts/dist/types/naylence/*",
         "../naylence-core-ts/src/naylence/*"
       ],
-      "naylence-runtime": [
+      "@naylence/runtime": [
         "../naylence-runtime-ts/dist/types/index",
         "../naylence-runtime-ts/src/index"
       ],

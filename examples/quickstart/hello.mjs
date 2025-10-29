@@ -1,5 +1,5 @@
-import { withFabric, enableLogging, LogLevel } from "naylence-runtime";
-import { Agent, BaseAgent } from "naylence-agent-sdk";
+import { withFabric, enableLogging, LogLevel } from "@naylence/runtime";
+import { Agent, BaseAgent } from "@naylence/agent-sdk";
 
 enableLogging(LogLevel.WARNING);
 
