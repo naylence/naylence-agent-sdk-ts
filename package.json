@@ -1,8 +1,8 @@
 {
   "name": "@naylence/agent-sdk",
-  "version": "0.3.3",
+  "version": "0.3.4-test.716",
   "type": "module",
-  "description": "Naylence Agent SDK - TypeScript port of the Python agent orchestration toolkit",
+  "description": "Naylence Agent SDK for TypeScript",
   "author": "Naylence Dev <naylencedev@gmail.com>",
   "license": "Apache-2.0",
   "keywords": [
@@ -27,9 +27,20 @@
   "types": "dist/types/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.js",
-      "types": "./dist/types/index.d.ts"
+      "types": "./dist/types/index.d.ts",
+      "import": {
+        "browser": "./dist/esm/browser.js",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "browser": "./dist/esm/browser.js",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./browser": {
+      "types": "./dist/types/browser.d.ts",
+      "import": "./dist/esm/browser.js",
+      "require": "./dist/esm/browser.js"
     },
     "./plugin": {
       "import": "./dist/esm/plugin.js",
@@ -48,7 +59,7 @@
   },
   "scripts": {
     "build": "npm run clean && npm run build:types && npm run build:cjs && npm run build:esm && npm run build:browser",
-    "build:types": "tsc --emitDeclarationOnly --outDir dist/types",
+    "build:types": "tsc -p tsconfig.types.json",
     "build:cjs": "tsc -p tsconfig.cjs.json",
     "build:esm": "tsc -p tsconfig.esm.json",
     "build:browser": "rollup -c rollup.config.js",
@@ -60,10 +71,13 @@
     "lint:fix": "eslint src/**/*.ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "dev": "tsc --watch --outDir dist/esm",
+    "inject-version": "node ./scripts/inject-version.js",
+    "prebuild": "npm run inject-version",
+    "predev": "npm run inject-version",
     "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
-    "@naylence/runtime": "^0.3.4",
+    "@naylence/runtime": "^0.3.5-test.916",
     "zod": "^4.1.11"
   },
   "peerDependencies": {

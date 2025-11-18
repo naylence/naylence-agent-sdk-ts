@@ -110,20 +110,40 @@ class Deferred<T = void> {
   }
 }
 
+type ProcessWithSignals = {
+  once: (event: string, listener: () => void) => void;
+  off?: (event: string, listener: () => void) => void;
+  removeListener?: (event: string, listener: () => void) => void;
+};
+
 async function setupSignalHandlers(stop: Deferred<void>): Promise<() => void> {
   if (!isNodeRuntime()) {
     return () => {};
   }
 
-  const { default: process } = await import('node:process');
+  const processGlobal = globalThis as { process?: ProcessWithSignals };
+  const processRef = processGlobal.process;
+
+  if (!processRef || typeof processRef.once !== 'function') {
+    return () => {};
+  }
+
   const handler = () => stop.resolve();
 
-  process.once('SIGINT', handler);
-  process.once('SIGTERM', handler);
+  processRef.once('SIGINT', handler);
+  processRef.once('SIGTERM', handler);
 
   return () => {
-    process.off('SIGINT', handler);
-    process.off('SIGTERM', handler);
+    if (typeof processRef.off === 'function') {
+      processRef.off('SIGINT', handler);
+      processRef.off('SIGTERM', handler);
+      return;
+    }
+
+    if (typeof processRef.removeListener === 'function') {
+      processRef.removeListener('SIGINT', handler);
+      processRef.removeListener('SIGTERM', handler);
+    }
   };
 }
 

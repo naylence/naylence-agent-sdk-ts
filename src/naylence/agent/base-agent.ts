@@ -14,7 +14,8 @@ import {
   FameFabric,
   generateId,
   getLogger,
-  getCurrentNode,
+  NodeLike,
+  Registerable,
   type KeyValueStore,
   type StorageProvider,
 } from '@naylence/runtime';
@@ -357,7 +358,7 @@ function resolveReplyTarget(
   return resolved === undefined ? null : resolved;
 }
 
-export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends Agent {
+export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends Agent implements Registerable{
   static STATE_MODEL: StateModelCtor<BaseAgentState> | null = null;
 
   private _name: string | null;
@@ -370,6 +371,7 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
   private readonly _stateNamespaceRaw: string | null;
   private readonly _stateKey: string;
   private readonly _stateFactory: (() => StateT) | null;
+  private _node: NodeLike | null = null;
   private _stateStore: KeyValueStore<StateT> | null = null;
   private _stateCache: StateT | null = null;
 
@@ -409,10 +411,8 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
 
   get storageProvider(): StorageProvider {
     if (!this._storageProvider) {
-      // Try to get storage provider from current node context (matches Python behavior)
-      const node = getCurrentNode();
-      if (node) {
-        this._storageProvider = node.storageProvider;
+      if (this._node) {
+        this._storageProvider = this._node.storageProvider;
       }
     }
 
@@ -423,6 +423,10 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     }
 
     return this._storageProvider;
+  }
+
+  public async onRegister?(node: NodeLike): Promise<void> {
+    this._node = node;
   }
 
   protected async acquireStateLock(): Promise<() => void> {

@@ -35,11 +35,17 @@ export default {
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
     '^@naylence/runtime$': '<rootDir>/node_modules/@naylence/runtime/dist/cjs/index.js',
+    '^@naylence/runtime/(.*)$': '<rootDir>/node_modules/@naylence/runtime/dist/cjs/$1',
     '^@naylence/core$': '<rootDir>/node_modules/@naylence/core/dist/cjs/index.js',
+    '^@naylence/core/(.*)$': '<rootDir>/node_modules/@naylence/core/dist/cjs/$1',
     '^@naylence/factory$': '<rootDir>/node_modules/@naylence/factory/dist/cjs/index.js',
-    '^naylence-core$': '<rootDir>/../naylence-core-ts/dist/cjs/index.js',
-    '^naylence-factory$': '<rootDir>/../naylence-factory-ts/dist/cjs/index.js',
-    '^naylence-runtime$': '<rootDir>/../naylence-runtime-ts/dist/cjs/index.js'
+    '^@naylence/factory/(.*)$': '<rootDir>/node_modules/@naylence/factory/dist/cjs/$1',
+    '^naylence-core$': '<rootDir>/node_modules/@naylence/core/dist/cjs/index.js',
+    '^naylence-core/(.*)$': '<rootDir>/node_modules/@naylence/core/dist/cjs/$1',
+    '^naylence-factory$': '<rootDir>/node_modules/@naylence/factory/dist/cjs/index.js',
+    '^naylence-factory/(.*)$': '<rootDir>/node_modules/@naylence/factory/dist/cjs/$1',
+    '^naylence-runtime$': '<rootDir>/node_modules/@naylence/runtime/dist/cjs/index.js',
+    '^naylence-runtime/(.*)$': '<rootDir>/node_modules/@naylence/runtime/dist/cjs/$1'
   },
   testTimeout: 30000,
   maxWorkers: 1

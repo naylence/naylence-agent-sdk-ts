@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals';
-import { FameAddress, type FameFabric } from '@naylence/runtime';
+import { FameAddress, type FameFabric } from '@naylence/core';
 import { AgentProxy } from '../naylence/agent/agent-proxy.js';
 import {
   TaskState,
