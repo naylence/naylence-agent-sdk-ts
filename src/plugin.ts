@@ -3,6 +3,7 @@
  */
 import type { FamePlugin } from '@naylence/factory';
 import { VERSION } from './version.js';
+import { ensureAgentFactoriesRegistered } from './naylence/agent/util/register-agent-factories.js';
 
 let initialized = false;
 
@@ -16,10 +17,7 @@ const agentSdkPlugin: FamePlugin = {
 
     initialized = true;
 
-    // The agent SDK primarily provides types, base classes, and utilities.
-    // It doesn't register factories like the runtime package does.
-    // The side-effect import of agent-proxy-default.js in index.ts
-    // handles the default agent proxy registration.
+    await ensureAgentFactoriesRegistered();
   },
 };
 

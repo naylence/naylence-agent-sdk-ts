@@ -3,6 +3,10 @@
   "compilerOptions": {
     "module": "CommonJS",
     "moduleResolution": "node",
+    "paths": {
+      "@naylence/runtime": ["node_modules/@naylence/runtime/dist/types/index.d.ts"],
+      "@naylence/runtime/node": ["node_modules/@naylence/runtime/dist/types/node.d.ts"]
+    },
     "outDir": "./dist/cjs",
     "declarationMap": false,
     "sourceMap": true,

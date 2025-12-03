@@ -13,7 +13,12 @@ export default defineConfig({
     sourcemap: true,
     inlineDynamicImports: true,
     globals: {
-      'ws': 'null'
+      ws: 'null',
+      '@naylence/runtime': 'NaylenceRuntime',
+      '@naylence/runtime/node': 'NaylenceRuntime',
+      '@naylence/core': 'NaylenceCore',
+      '@naylence/factory': 'NaylenceFactory',
+      '@opentelemetry/api': 'opentelemetry'
     }
   },
   plugins: [
@@ -31,5 +36,15 @@ export default defineConfig({
       sourceMap: true
     })
   ],
-  external: ['ws']
+  external: [
+    'ws',
+    '@naylence/runtime',
+    '@naylence/runtime/node',
+    '@naylence/core',
+    '@naylence/factory',
+    '@opentelemetry/api',
+    'node:fs/promises',
+    'node:url',
+    'node:module'
+  ]
 });

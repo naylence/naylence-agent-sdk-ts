@@ -77,10 +77,13 @@
     "inject-version": "node ./scripts/inject-version.js",
     "prebuild": "npm run inject-version",
     "predev": "npm run inject-version",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test",
+    "build:examples": "tsc -p tsconfig.examples.json"
   },
   "dependencies": {
-    "@naylence/runtime": "^0.3.20",
+    "@naylence/core": "file:../naylence-core-ts",
+    "@naylence/factory": "file:../naylence-factory-ts",
+    "@naylence/runtime": "file:../naylence-runtime-ts",
     "zod": "^4.1.11"
   },
   "peerDependencies": {
