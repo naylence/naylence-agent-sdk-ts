@@ -31,8 +31,8 @@ type RpcRequest =
     };
 
 type MessageRequest =
-  | { targetAddr: string; type: string; payload?: any }
-  | { capabilities: string[]; type: string; payload?: any };
+  | { targetAddr: string; type?: string; payload?: any }
+  | { capabilities: string[]; type?: string; payload?: any };
 
 export class AgentHttpGatewayListener extends TransportListener {
   private readonly _httpServer: HttpServer;
@@ -213,24 +213,24 @@ export class AgentHttpGatewayListener extends TransportListener {
     }
 
     const record = body as Record<string, unknown>;
-    const type = typeof record.type === 'string' ? record.type.trim() : '';
-    if (!type) {
-      return null;
-    }
-
     const targetAddr = typeof record.targetAddr === 'string' ? record.targetAddr.trim() : '';
     const capsRaw = Array.isArray(record.capabilities)
       ? (record.capabilities as unknown[]).map((value) => (typeof value === 'string' ? value.trim() : '')).filter(Boolean)
       : [];
 
+    const type = typeof record.type === 'string' ? record.type.trim() : '';
     const payload = 'payload' in record ? (record as { payload: any }).payload : undefined;
 
+    if (!type && payload === undefined) {
+      return null;
+    }
+
     if (targetAddr) {
-      return { targetAddr, type, ...(payload !== undefined ? { payload } : {}) };
+      return { targetAddr, ...(type ? { type } : {}), ...(payload !== undefined ? { payload } : {}) };
     }
 
     if (capsRaw.length > 0) {
-      return { capabilities: capsRaw, type, ...(payload !== undefined ? { payload } : {}) };
+      return { capabilities: capsRaw, ...(type ? { type } : {}), ...(payload !== undefined ? { payload } : {}) };
     }
 
     return null;
@@ -280,7 +280,7 @@ export class AgentHttpGatewayListener extends TransportListener {
       frame: {
         type: 'Data',
         payload: {
-          type: request.type,
+          ...(request.type ? { type: request.type } : {}),
           ...(request.payload !== undefined ? { payload: request.payload } : {}),
         },
       },

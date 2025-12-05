@@ -81,9 +81,7 @@
     "build:examples": "tsc -p tsconfig.examples.json"
   },
   "dependencies": {
-    "@naylence/core": "file:../naylence-core-ts",
-    "@naylence/factory": "file:../naylence-factory-ts",
-    "@naylence/runtime": "file:../naylence-runtime-ts",
+    "@naylence/runtime": "^0.3.6-test.101",
     "zod": "^4.1.11"
   },
   "peerDependencies": {

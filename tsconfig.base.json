@@ -4,6 +4,7 @@
     "module": "Node16",
     "lib": ["ES2020", "DOM"],
     "moduleResolution": "node16",
+    "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "allowJs": true,
