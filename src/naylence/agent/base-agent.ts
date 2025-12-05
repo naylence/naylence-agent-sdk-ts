@@ -13,6 +13,7 @@ import {
   FameAddress,
   FameFabric,
   generateId,
+  getFabricForNode,
   getLogger,
   NodeLike,
   Registerable,
@@ -372,6 +373,7 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
   private readonly _stateKey: string;
   private readonly _stateFactory: (() => StateT) | null;
   private _node: NodeLike | null = null;
+  private _fabric: FameFabric | null = null;
   private _stateStore: KeyValueStore<StateT> | null = null;
   private _stateCache: StateT | null = null;
 
@@ -425,8 +427,19 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     return this._storageProvider;
   }
 
+  /**
+   * Returns the fabric this agent is registered with.
+   * This is set during onRegister() and should be used instead of FameFabric.current()
+   * when the agent needs to make calls to other agents.
+   */
+  protected get fabric(): FameFabric | null {
+    return this._fabric;
+  }
+
   public async onRegister?(node: NodeLike): Promise<void> {
     this._node = node;
+    // Look up the fabric from the registry (set by InProcessFameFabric.start())
+    this._fabric = getFabricForNode(node) ?? null;
   }
 
   protected async acquireStateLock(): Promise<() => void> {
@@ -738,7 +751,8 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
           envelopeOptions.corrId = String(rpcRequest.id);
         }
         const envelope = createFameEnvelope(envelopeOptions);
-        await FameFabric.current().send(envelope);
+        const fabricToUse = this._fabric ?? FameFabric.current();
+        await fabricToUse.send(envelope);
       }
     } catch (error) {
       if (!signal.aborted) {
