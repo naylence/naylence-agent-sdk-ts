@@ -680,7 +680,9 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
         if (rpcRequest.id != null) {
           envelopeOptions.corrId = String(rpcRequest.id);
         }
-        const envelopeResponse = createFameEnvelope(envelopeOptions);
+        const envelopeResponse = this._node
+          ? this._node.envelopeFactory.createEnvelope(envelopeOptions)
+          : createFameEnvelope(envelopeOptions);
         yield createMessageResponse(envelopeResponse);
       }
     }.bind(this);
@@ -750,7 +752,9 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
         if (rpcRequest.id != null) {
           envelopeOptions.corrId = String(rpcRequest.id);
         }
-        const envelope = createFameEnvelope(envelopeOptions);
+        const envelope = this._node
+          ? this._node.envelopeFactory.createEnvelope(envelopeOptions)
+          : createFameEnvelope(envelopeOptions);
         const fabricToUse = this._fabric ?? FameFabric.current();
         await fabricToUse.send(envelope);
       }
