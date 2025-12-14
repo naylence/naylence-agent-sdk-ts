@@ -62,6 +62,10 @@ export const CLIENT_CONFIG = {
       type: 'AdmissionProfile' as const,
       profile: '${env:FAME_ADMISSION_PROFILE:open}',
     },
+    identity_policy: {
+      type: 'NodeIdentityPolicyProfile' as const,
+      profile: '${env:FAME_NODE_IDENTITY_PROFILE:default}',
+    },
     storage: {
       type: 'StorageProfile' as const,
       profile: '${env:FAME_STORAGE_PROFILE:memory}',
@@ -87,6 +91,10 @@ export const NODE_CONFIG = {
     admission: {
       type: 'AdmissionProfile' as const,
       profile: '${env:FAME_ADMISSION_PROFILE:open}',
+    },
+    identity_policy: {
+      type: 'NodeIdentityPolicyProfile' as const,
+      profile: '${env:FAME_NODE_IDENTITY_PROFILE:default}',
     },
     storage: {
       type: 'StorageProfile' as const,
@@ -123,6 +131,10 @@ export const SENTINEL_CONFIG = {
     admission: {
       type: 'AdmissionProfile' as const,
       profile: '${env:FAME_ADMISSION_PROFILE:none}',
+    },
+    identity_policy: {
+      type: 'NodeIdentityPolicyProfile' as const,
+      profile: '${env:FAME_NODE_IDENTITY_PROFILE:default}',
     },
     storage: {
       type: 'StorageProfile' as const,
