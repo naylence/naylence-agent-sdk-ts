@@ -109,6 +109,36 @@ Both base classes include sensible defaults (poll‑based streaming, simple auth
 
 ---
 
+## Generating API Documentation
+
+The SDK includes TypeDoc configuration to generate Markdown-based API reference documentation. The output is compatible with Nextra and other Markdown-based documentation systems.
+
+### Generate docs locally
+
+```bash
+# Install dependencies (if not already done)
+npm install
+
+# Generate API documentation
+npm run docs
+```
+
+This produces Markdown files in `docs/reference/ts/_generated/`.
+
+### Available scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run docs` | Clean and regenerate API documentation |
+| `npm run docs:gen` | Generate documentation (without cleaning first) |
+| `npm run docs:clean` | Remove generated documentation files |
+
+### Documentation scope
+
+Only the curated public API surface (exported from `src/public-api.ts`) is documented. Internal utilities and implementation details are excluded.
+
+---
+
 ## Security notes
 
 The SDK runs on the Naylence fabric's security profiles:

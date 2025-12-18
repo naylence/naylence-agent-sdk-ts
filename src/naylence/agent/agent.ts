@@ -1,3 +1,17 @@
+/**
+ * Agent module providing the abstract {@link Agent} class.
+ *
+ * An Agent is a self-contained unit of work that can receive tasks, process them,
+ * and return results. Agents communicate over the Fame fabric using a standard
+ * task-based protocol.
+ *
+ * @remarks
+ * For concrete implementations:
+ * - Use {@link BaseAgent} when you need full control over task handling and state.
+ * - Use {@link BackgroundTaskAgent} for long-running or async background work.
+ *
+ * @module
+ */
 import {
   FameAddress,
   FameFabric,
@@ -29,11 +43,25 @@ import type { AgentProxy } from './agent-proxy.js';
 
 const logger = getLogger('naylence.agent.agent');
 
+/**
+ * Payload type for agent task messages.
+ *
+ * Can be a JSON object, a string, or null.
+ */
 export type Payload = Record<string, unknown> | string | null;
+
+/**
+ * Collection of address-payload pairs for broadcasting tasks to multiple agents.
+ */
 export type Targets = Iterable<readonly [FameAddress | string, Payload]>;
 
+/** @internal */
 type AgentTaskHandler = (payload: Payload, id: string | null) => unknown | Promise<unknown>;
 
+/**
+ * Constructor signature for BaseAgent implementations.
+ * @internal
+ */
 export type BaseAgentConstructor = new (name?: string | null, options?: any) => BaseAgent;
 
 let registeredBaseAgentCtor: BaseAgentConstructor | null = null;
@@ -50,9 +78,11 @@ export function registerBaseAgentConstructor(ctor: BaseAgentConstructor): void {
   registeredBaseAgentCtor = ctor;
 }
 
+/** @internal */
 const isNodeRuntime = (): boolean =>
   typeof process !== 'undefined' && process.release?.name === 'node';
 
+/** @internal */
 const LOG_LEVEL_KEYWORDS: Record<string, LogLevel> = {
   critical: LogLevel.CRITICAL,
   error: LogLevel.ERROR,
@@ -63,6 +93,7 @@ const LOG_LEVEL_KEYWORDS: Record<string, LogLevel> = {
   trace: LogLevel.TRACE,
 };
 
+/** @internal */
 function normalizeLogLevel(level: string | number | LogLevel): LogLevel {
   if (typeof level === 'number') {
     if (Object.values(LogLevel).includes(level)) {
@@ -83,6 +114,7 @@ function normalizeLogLevel(level: string | number | LogLevel): LogLevel {
   return level;
 }
 
+/** @internal */
 class Deferred<T = void> {
   private settled = false;
   private readonly internalResolve!: (value: T | PromiseLike<T>) => void;
@@ -110,12 +142,14 @@ class Deferred<T = void> {
   }
 }
 
+/** @internal */
 type ProcessWithSignals = {
   once: (event: string, listener: () => void) => void;
   off?: (event: string, listener: () => void) => void;
   removeListener?: (event: string, listener: () => void) => void;
 };
 
+/** @internal */
 async function setupSignalHandlers(stop: Deferred<void>): Promise<() => void> {
   if (!isNodeRuntime()) {
     return () => {};
@@ -147,6 +181,7 @@ async function setupSignalHandlers(stop: Deferred<void>): Promise<() => void> {
   };
 }
 
+/** @internal */
 async function acquireFabric(options?: Record<string, unknown>): Promise<{
   fabric: FameFabric;
   release: () => Promise<void>;
@@ -173,10 +208,12 @@ async function acquireFabric(options?: Record<string, unknown>): Promise<{
   };
 }
 
+/** @internal */
 function toFameAddress(value: FameAddress | string): FameAddress {
   return value instanceof FameAddress ? value : new FameAddress(String(value));
 }
 
+/** @internal */
 function invokeProxyRunTask(proxy: Agent, payload: Payload, taskId: string): Promise<any> {
   if (typeof proxy.runTask === 'function') {
     return proxy.runTask(payload, taskId);
@@ -184,21 +221,40 @@ function invokeProxyRunTask(proxy: Agent, payload: Payload, taskId: string): Pro
   throw new Error('AgentProxy must implement runTask');
 }
 
+/**
+ * Options for creating a remote agent proxy.
+ *
+ * Provide exactly one of `address` or `capabilities` to identify the target.
+ */
 export interface AgentRemoteOptions {
+  /** Direct address of the target agent. */
   address?: FameAddress | string;
+  /** Required capabilities for capability-based discovery. */
   capabilities?: string[];
+  /** Fabric instance to use. Defaults to the current fabric. */
   fabric?: FameFabric;
 }
 
+/**
+ * Options for running tasks on multiple agents.
+ */
 export interface AgentRunManyOptions {
+  /** Fabric instance to use. Defaults to the current fabric. */
   fabric?: FameFabric;
+  /**
+   * If true (default), errors are collected alongside results.
+   * If false, the first error rejects the promise.
+   */
   gatherExceptions?: boolean;
 }
 
+/**
+ * Options for serving an agent at a given address.
+ */
 export interface AgentServeOptions {
   /**
-   * Log level for the agent. Can be a string ('debug', 'info', 'warning', 'error', 'critical'),
-   * a numeric log level, or a LogLevel enum value.
+   * Log level for the agent.
+   * Accepts 'debug', 'info', 'warning', 'error', 'critical', or a LogLevel value.
    */
   logLevel?: string | number | LogLevel | null;
 
@@ -216,39 +272,131 @@ export interface AgentServeOptions {
   [key: string]: unknown;
 }
 
+/**
+ * Abstract base class for all agents.
+ *
+ * Agents are addressable services that handle tasks over the Fame fabric.
+ * This class defines the core protocol methods every agent must implement.
+ *
+ * @remarks
+ * Do not extend Agent directly. Instead:
+ * - Extend {@link BaseAgent} for standard request-response agents.
+ * - Extend {@link BackgroundTaskAgent} for long-running background work.
+ *
+ * Use {@link Agent.remote} or {@link Agent.remoteByAddress} to create proxies
+ * for communicating with remote agents.
+ *
+ * @example
+ * ```typescript
+ * import { BaseAgent, Payload } from '@naylence/agent-sdk';
+ *
+ * class EchoAgent extends BaseAgent {
+ *   async runTask(payload: Payload): Promise<Payload> {
+ *     return payload;
+ *   }
+ * }
+ *
+ * const agent = new EchoAgent('echo');
+ * await agent.serve('fame://echo');
+ * ```
+ */
 export abstract class Agent extends RpcMixin implements FameService {
+  /**
+   * Capabilities advertised by this agent for discovery.
+   */
   get capabilities(): string[] | undefined {
     return undefined;
   }
 
+  /** The agent's name, used for logging and identification. */
   abstract get name(): string | null;
 
+  /** Returns metadata about this agent (address, capabilities, etc.). */
   abstract get spec(): Record<string, unknown>;
 
+  /** Returns the agent's card describing its capabilities and metadata. */
   abstract getAgentCard(): Promise<AgentCard>;
 
+  /**
+   * Validates authentication credentials.
+   * @param credentials - The credentials to validate.
+   * @returns True if authentication succeeds.
+   */
   abstract authenticate(credentials: AuthenticationInfo): boolean;
 
+  /**
+   * Initiates a new task.
+   * @param params - Task parameters including message and optional metadata.
+   * @returns The created task with its initial status.
+   */
   abstract startTask(params: TaskSendParams): Promise<Task>;
 
+  /**
+   * Executes a task synchronously and returns the result.
+   * @param payload - The task payload.
+   * @param id - Optional task identifier.
+   * @returns The task result.
+   */
   abstract runTask(payload: Payload, id: string | null): Promise<any>;
 
+  /**
+   * Retrieves the current status of a task.
+   * @param params - Query parameters including the task ID.
+   */
   abstract getTaskStatus(params: TaskQueryParams): Promise<Task>;
 
+  /**
+   * Requests cancellation of a running task.
+   * @param params - Parameters including the task ID.
+   * @returns The task with updated status.
+   */
   abstract cancelTask(params: TaskIdParams): Promise<Task>;
 
+  /**
+   * Subscribes to real-time updates for a task.
+   * @param params - Task parameters.
+   * @returns An async iterable of status and artifact update events.
+   */
   abstract subscribeToTaskUpdates(
     params: TaskSendParams
   ): AsyncIterable<TaskStatusUpdateEvent | TaskArtifactUpdateEvent>;
 
+  /**
+   * Cancels a task subscription.
+   * @param params - Parameters including the task ID.
+   */
   abstract unsubscribeTask(params: TaskIdParams): Promise<any>;
 
+  /**
+   * Registers a push notification endpoint for task updates.
+   * @param config - Push notification configuration.
+   */
   abstract registerPushEndpoint(
     config: TaskPushNotificationConfig
   ): Promise<TaskPushNotificationConfig>;
 
+  /**
+   * Retrieves the push notification config for a task.
+   * @param params - Parameters including the task ID.
+   */
   abstract getPushNotificationConfig(params: TaskIdParams): Promise<TaskPushNotificationConfig>;
 
+  /**
+   * Creates a proxy for communicating with a remote agent.
+   *
+   * @remarks
+   * Provide exactly one of `address` or `capabilities` in the options.
+   *
+   * @example
+   * ```typescript
+   * const proxy = Agent.remote<EchoAgent>({ address: 'fame://echo' });
+   * const result = await proxy.runTask('hello');
+   * ```
+   *
+   * @param options - Remote agent options.
+   * @returns A proxy for the remote agent.
+   * @throws Error if both or neither of address/capabilities are provided.
+   */
   static remote<TAgent extends Agent>(
     this: typeof Agent,
     options: AgentRemoteOptions
@@ -273,6 +421,13 @@ export abstract class Agent extends RpcMixin implements FameService {
     });
   }
 
+  /**
+   * Creates a proxy for a remote agent by its address.
+   *
+   * @param address - The target agent's address.
+   * @param options - Optional fabric configuration.
+   * @returns A proxy for the remote agent.
+   */
   static remoteByAddress<TAgent extends Agent>(
     this: typeof Agent,
     address: FameAddress | string,
@@ -285,6 +440,13 @@ export abstract class Agent extends RpcMixin implements FameService {
     return this.remote<TAgent>(remoteOptions);
   }
 
+  /**
+   * Creates a proxy for a remote agent by required capabilities.
+   *
+   * @param capabilities - Required capabilities for discovery.
+   * @param options - Optional fabric configuration.
+   * @returns A proxy for a matching remote agent.
+   */
   static remoteByCapabilities<TAgent extends Agent>(
     this: typeof Agent,
     capabilities: string[],
@@ -297,6 +459,15 @@ export abstract class Agent extends RpcMixin implements FameService {
     return this.remote<TAgent>(remoteOptions);
   }
 
+  /**
+   * Creates an agent from a simple handler function.
+   *
+   * @remarks
+   * Useful for quick prototyping without defining a full agent class.
+   *
+   * @param handler - Function that processes task payloads.
+   * @returns A new agent instance wrapping the handler.
+   */
   static async fromHandler(handler: AgentTaskHandler): Promise<Agent> {
     if (!registeredBaseAgentCtor) {
       await import('./base-agent.js');
@@ -317,6 +488,14 @@ export abstract class Agent extends RpcMixin implements FameService {
     return new HandlerAgent();
   }
 
+  /**
+   * Sends the same payload to multiple agents.
+   *
+   * @param addresses - List of agent addresses.
+   * @param payload - Payload to send to all agents.
+   * @param options - Execution options.
+   * @returns Array of [address, result|error] tuples.
+   */
   static async broadcast(
     this: typeof Agent,
     addresses: Array<FameAddress | string>,
@@ -329,6 +508,13 @@ export abstract class Agent extends RpcMixin implements FameService {
     return this.runMany(targets, options);
   }
 
+  /**
+   * Runs tasks on multiple agents with individual payloads.
+   *
+   * @param targets - Iterable of [address, payload] pairs.
+   * @param options - Execution options.
+   * @returns Array of [address, result|error] tuples.
+   */
   static async runMany<TAgent extends Agent>(
     this: typeof Agent,
     targets: Targets,
@@ -374,6 +560,16 @@ export abstract class Agent extends RpcMixin implements FameService {
     });
   }
 
+  /**
+   * Starts serving this agent at the given address.
+   *
+   * @remarks
+   * In Node.js, the agent listens for SIGINT/SIGTERM to shut down gracefully.
+   * The method returns when the agent stops serving.
+   *
+   * @param address - The address to serve at (e.g., 'fame://my-agent').
+   * @param options - Serve options including log level and fabric config.
+   */
   async aserve(address: FameAddress | string, options: AgentServeOptions = {}): Promise<void> {
     // Extract logLevel, pass everything else to fabric
     const { logLevel = null, ...fabricOptions } = options;
@@ -407,6 +603,12 @@ export abstract class Agent extends RpcMixin implements FameService {
     }
   }
 
+  /**
+   * Alias for {@link Agent.aserve}.
+   *
+   * @param address - The address to serve at.
+   * @param options - Serve options.
+   */
   serve(address: FameAddress | string, options: AgentServeOptions = {}): Promise<void> {
     return this.aserve(address, options);
   }

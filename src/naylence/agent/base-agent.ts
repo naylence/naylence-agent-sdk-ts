@@ -1,3 +1,15 @@
+/**
+ * Base class for implementing agents.
+ *
+ * {@link BaseAgent} provides the standard implementation of the {@link Agent} protocol
+ * with built-in support for state management, message handling, and task execution.
+ *
+ * @remarks
+ * Extend this class for request-response style agents. For long-running background
+ * work, consider extending {@link BackgroundTaskAgent} instead.
+ *
+ * @module
+ */
 import {
   AGENT_CAPABILITY,
   createFameEnvelope,
@@ -53,8 +65,10 @@ const logger = getLogger('naylence.agent.base_agent');
 
 export { TERMINAL_TASK_STATES };
 
+/** @internal */
 type JsonRpcParams = Record<string, unknown>;
 
+/** @internal */
 interface JsonRpcRequest extends Record<string, unknown> {
   jsonrpc: string;
   method: string;
@@ -62,6 +76,7 @@ interface JsonRpcRequest extends Record<string, unknown> {
   id?: string | number | null;
 }
 
+/** @internal */
 class StateContext<StateT extends BaseAgentState> {
   private releaseLock: (() => void) | null = null;
   private loadedState: StateT | null = null;
@@ -303,21 +318,32 @@ export class BaseAgentState {
   }
 }
 
+/** @internal */
 type StateModelCtor<T extends BaseAgentState> = new () => T;
 
+/** @internal */
 interface SubscriptionTask {
   cancel(): void;
   promise: Promise<void>;
 }
 
+/**
+ * Configuration options for {@link BaseAgent}.
+ */
 export interface BaseAgentOptions<StateT extends BaseAgentState> {
+  /** State model class for typed state management. */
   stateModel?: StateModelCtor<StateT> | null;
+  /** Namespace for state storage. Defaults to agent name. */
   stateNamespace?: string | null;
+  /** Key under which state is stored. Defaults to 'state'. */
   stateKey?: string;
+  /** Factory function to create initial state. */
   stateFactory?: (() => StateT) | null;
+  /** Custom storage provider for state persistence. */
   storageProvider?: StorageProvider | null;
 }
 
+/** @internal */
 function camelToSnakeCase(name: string): string {
   return name
     .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
@@ -325,12 +351,14 @@ function camelToSnakeCase(name: string): string {
     .toLowerCase();
 }
 
+/** @internal */
 function sanitizeNamespace(ns: string): string {
   const replaced = ns.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[._-]+|[._-]+$/g, '');
   const safe = replaced.length > 0 ? replaced : 'ns';
   return safe.slice(0, 120);
 }
 
+/** @internal */
 async function delay(ms: number): Promise<void> {
   await new Promise((resolve) => {
     const timeout = globalThis.setTimeout;
@@ -341,6 +369,7 @@ async function delay(ms: number): Promise<void> {
   });
 }
 
+/** @internal */
 function resolveRpcParams(params: JsonRpcRequest['params']): JsonRpcParams {
   if (params && typeof params === 'object') {
     return params as JsonRpcParams;
@@ -348,6 +377,7 @@ function resolveRpcParams(params: JsonRpcRequest['params']): JsonRpcParams {
   return {};
 }
 
+/** @internal */
 function resolveReplyTarget(
   explicit: string | FameAddress | null | undefined,
   params: JsonRpcParams
@@ -359,7 +389,55 @@ function resolveReplyTarget(
   return resolved === undefined ? null : resolved;
 }
 
+/**
+ * Standard implementation of the {@link Agent} protocol.
+ *
+ * Provides built-in state management, message handling, and task lifecycle support.
+ * Extend this class and override {@link BaseAgent.runTask} to implement your agent logic.
+ *
+ * @remarks
+ * BaseAgent handles:
+ * - JSON-RPC message routing
+ * - State persistence with optional Zod validation
+ * - Task creation from runTask results
+ * - Graceful shutdown via SIGINT/SIGTERM
+ *
+ * For background/async task execution, use {@link BackgroundTaskAgent} instead.
+ *
+ * @example
+ * ```typescript
+ * import { BaseAgent, Payload, BaseAgentState } from '@naylence/agent-sdk';
+ * import { z } from 'zod';
+ *
+ * const CounterSchema = z.object({ count: z.number() });
+ *
+ * class CounterState extends BaseAgentState {
+ *   static readonly schema = CounterSchema;
+ *   count = 0;
+ * }
+ *
+ * class CounterAgent extends BaseAgent<CounterState> {
+ *   static STATE_MODEL = CounterState;
+ *
+ *   async runTask(payload: Payload): Promise<number> {
+ *     return await this.withState(async (state) => {
+ *       state.count += 1;
+ *       return state.count;
+ *     });
+ *   }
+ * }
+ *
+ * const agent = new CounterAgent('counter');
+ * await agent.serve('fame://counter');
+ * ```
+ *
+ * @typeParam StateT - The state model type, defaults to {@link BaseAgentState}.
+ */
 export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends Agent implements Registerable{
+  /**
+   * Default state model class. Override in subclasses to set state type.
+   * @internal
+   */
   static STATE_MODEL: StateModelCtor<BaseAgentState> | null = null;
 
   private _name: string | null;
@@ -377,6 +455,12 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
   private _stateStore: KeyValueStore<StateT> | null = null;
   private _stateCache: StateT | null = null;
 
+  /**
+   * Creates a new BaseAgent.
+   *
+   * @param name - Agent name. Defaults to snake_case of the class name.
+   * @param options - Configuration options for state and storage.
+   */
   constructor(name: string | null = null, options: BaseAgentOptions<StateT> = {}) {
     super();
     this._name = name ?? camelToSnakeCase(this.constructor.name);
@@ -389,10 +473,15 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     this._stateFactory = options.stateFactory ?? null;
   }
 
+  /**
+   * Capabilities advertised by this agent.
+   * Includes the standard agent capability by default.
+   */
   get capabilities(): string[] {
     return [...this._capabilities];
   }
 
+  /** The agent's name. */
   get name(): string | null {
     return this._name;
   }
@@ -403,14 +492,20 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     };
   }
 
+  /** The address this agent is registered at. */
   get address(): FameAddress | null {
     return this._address;
   }
 
+  /** @internal */
   set address(value: FameAddress | null) {
     this._address = value;
   }
 
+  /**
+   * Storage provider for state persistence.
+   * @throws Error if no storage provider is available.
+   */
   get storageProvider(): StorageProvider {
     if (!this._storageProvider) {
       if (this._node) {
@@ -442,6 +537,7 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     this._fabric = getFabricForNode(node) ?? null;
   }
 
+  /** @internal */
   protected async acquireStateLock(): Promise<() => void> {
     let acquiredResolve!: () => void;
     const acquired = new Promise<void>((resolve) => {
@@ -473,6 +569,7 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     };
   }
 
+  /** @internal */
   private ensureStateModel(): StateModelCtor<StateT> {
     if (this._stateModel) {
       return this._stateModel;
@@ -482,6 +579,7 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     );
   }
 
+  /** @internal */
   private async ensureStateStore(modelType: StateModelCtor<StateT>): Promise<void> {
     if (this._stateStore) {
       return;
@@ -497,6 +595,7 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     this._stateStore = await provider.getKeyValueStore(modelType, namespace);
   }
 
+  /** @internal */
   private defaultStateNamespace(): string {
     if (!this._name) {
       throw new Error(
@@ -506,6 +605,7 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     return `__agent_${this._name}`;
   }
 
+  /** @internal */
   protected async loadStateInternal(): Promise<StateT> {
     if (this._stateCache) {
       return this._stateCache;
@@ -539,6 +639,7 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     return state;
   }
 
+  /** @internal */
   protected async saveStateInternal(state: StateT): Promise<void> {
     const modelType = this.ensureStateModel();
     await this.ensureStateStore(modelType);
@@ -553,6 +654,14 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     this._stateCache = state;
   }
 
+  /**
+   * State context for lock-protected state access.
+   *
+   * @remarks
+   * Prefer using {@link BaseAgent.withState} for simpler access patterns.
+   *
+   * @throws Error if no state model is configured.
+   */
   get state(): StateContext<StateT> {
     if (!this._stateModel && !this._stateFactory) {
       throw new Error('No state model configured');
@@ -564,10 +673,32 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     );
   }
 
+  /**
+   * Executes a callback with exclusive access to the agent's state.
+   *
+   * State changes are automatically persisted after the callback completes.
+   *
+   * @param callback - Function receiving the current state.
+   * @returns The callback's return value.
+   *
+   * @example
+   * ```typescript
+   * const count = await this.withState(async (state) => {
+   *   state.count += 1;
+   *   return state.count;
+   * });
+   * ```
+   */
   async withState<T>(callback: (state: StateT) => Promise<T>): Promise<T> {
     return await this.state.use(callback);
   }
 
+  /**
+   * Retrieves a snapshot of the current state.
+   *
+   * @remarks
+   * Returns a point-in-time copy. For modifications, use {@link BaseAgent.withState}.
+   */
   async getState(): Promise<StateT> {
     const release = await this.acquireStateLock();
     try {
@@ -577,6 +708,9 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     }
   }
 
+  /**
+   * Deletes all persisted state for this agent.
+   */
   async clearState(): Promise<void> {
     const release = await this.acquireStateLock();
     try {
@@ -589,6 +723,7 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     }
   }
 
+  /** @internal */
   private static isRpcRequest(payload: unknown): payload is JsonRpcRequest {
     if (!payload || typeof payload !== 'object') {
       return false;
@@ -607,6 +742,7 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     return true;
   }
 
+  /** @internal */
   async handleMessage(
     envelope: FameEnvelope,
     _context?: FameDeliveryContext
@@ -639,11 +775,21 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     return await this.handleRpcMessage(decoded, envelope);
   }
 
+  /**
+   * Override to handle non-RPC messages.
+   *
+   * Called when the agent receives a message that is not a JSON-RPC request.
+   * The default implementation logs a warning and returns null.
+   *
+   * @param message - The decoded message payload.
+   * @returns Optional response to send back.
+   */
   async onMessage(message: unknown): Promise<FameMessageResponse | null | void> {
     logger.warning('unhandled_inbound_message', { message });
     return null;
   }
 
+  /** @internal */
   private async handleRpcMessage(
     rpcRequest: JsonRpcRequest,
     envelope: FameEnvelope
@@ -690,6 +836,7 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     return generator();
   }
 
+  /** @internal */
   private startSubscriptionTask(
     rpcRequest: JsonRpcRequest,
     replyTo: string | FameAddress | null
@@ -720,6 +867,7 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     }
   }
 
+  /** @internal */
   private async streamSendSubscribe(
     rpcRequest: JsonRpcRequest,
     replyTo: string | FameAddress | null,
@@ -838,6 +986,25 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     );
   }
 
+  /**
+   * Override to implement task execution logic.
+   *
+   * This is the primary extension point for agent behavior. Return the task result
+   * or throw an error to fail the task.
+   *
+   * @param _payload - The task payload.
+   * @param _id - Optional task identifier.
+   * @returns The task result.
+   * @throws UnsupportedOperationException if not overridden.
+   *
+   * @example
+   * ```typescript
+   * async runTask(payload: Payload): Promise<string> {
+   *   const input = typeof payload === 'string' ? payload : '';
+   *   return `Hello, ${input}!`;
+   * }
+   * ```
+   */
   async runTask(_payload: Payload, _id: string | null): Promise<unknown> {
     void _payload;
     void _id;
@@ -846,6 +1013,18 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     );
   }
 
+  /**
+   * Initiates a task and returns its status.
+   *
+   * @remarks
+   * If you override {@link BaseAgent.runTask}, this method automatically
+   * creates a Task from the result. Override this method for custom
+   * task lifecycle management.
+   *
+   * @param params - Task parameters including message and metadata.
+   * @returns The completed task with result.
+   * @throws Error if neither startTask nor runTask is implemented.
+   */
   async startTask(params: TaskSendParams): Promise<Task> {
     const ctor = this.constructor as typeof BaseAgent;
 
@@ -873,6 +1052,7 @@ export class BaseAgent<StateT extends BaseAgentState = BaseAgentState> extends A
     throw new Error(`${ctor.name} must implement at least one of: startTask() or runTask()`);
   }
 
+  /** @internal */
   async #createTaskFromPayloadResponse(
     params: TaskSendParams,
     payload: Payload,

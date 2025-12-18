@@ -1,3 +1,16 @@
+/**
+ * Agent proxy module for remote agent communication.
+ *
+ * An {@link AgentProxy} is a client-side handle for invoking methods on a remote
+ * agent. Use it when you need to call an agent that lives in another process,
+ * container, or network location.
+ *
+ * @remarks
+ * Create proxies via {@link Agent.remote}, {@link Agent.remoteByAddress}, or
+ * {@link Agent.remoteByCapabilities} rather than instantiating AgentProxy directly.
+ *
+ * @module
+ */
 import { FameAddress, generateId, createRpcProxy } from '@naylence/runtime';
 import type { FameFabric } from '@naylence/runtime';
 import type { FameEnvelope } from '@naylence/core';
@@ -29,12 +42,16 @@ import { firstTextPart, makeTaskParams } from './util.js';
 import type { MakeTaskParamsOptions } from './util.js';
 import { Agent, type Payload } from './agent.js';
 
+/** @internal */
 type RunTaskPayload = Payload;
 
+/** @internal */
 type StreamParser<R> = (payload: Record<string, unknown>) => R;
 
+/** @internal */
 type AgentTaskResult<TAgent extends Agent> = Awaited<ReturnType<TAgent['runTask']>>;
 
+/** @internal */
 interface AgentProxyCtorOptions {
   address?: FameAddress | string | null;
   capabilities?: string[] | null;
@@ -42,11 +59,13 @@ interface AgentProxyCtorOptions {
   fabric: FameFabric;
 }
 
+/** @internal */
 interface StreamOptions {
   timeoutMs?: number | null;
   maxItems?: number | null;
 }
 
+/** @internal */
 function toRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object') {
     return {};
@@ -54,10 +73,12 @@ function toRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+/** @internal */
 function toFameAddress(address: FameAddress | string): FameAddress {
   return address instanceof FameAddress ? address : new FameAddress(String(address));
 }
 
+/** @internal */
 function wrapAgentProxy<T extends AgentProxy>(proxy: T): T {
   // Create RPC proxy options - only include address or capabilities, not both
   const proxyOptions: any = {
@@ -91,6 +112,7 @@ function wrapAgentProxy<T extends AgentProxy>(proxy: T): T {
   }) as T;
 }
 
+/** @internal */
 async function nextWithTimeout<T>(
   iterator: AsyncIterator<T>,
   timeoutMs: number | null | undefined
@@ -113,15 +135,59 @@ async function nextWithTimeout<T>(
   }
 }
 
+/**
+ * Client-side proxy for communicating with remote agents.
+ *
+ * AgentProxy implements the {@link Agent} interface, allowing you to call
+ * remote agents as if they were local objects. Method calls are serialized
+ * and sent over the Fame fabric.
+ *
+ * @remarks
+ * Do not instantiate AgentProxy directly. Use the factory methods on
+ * {@link Agent} to create proxies:
+ * - {@link Agent.remote} for flexible options
+ * - {@link Agent.remoteByAddress} for direct addressing
+ * - {@link Agent.remoteByCapabilities} for capability-based discovery
+ *
+ * The proxy also supports arbitrary RPC method calls. Any method not defined
+ * on the proxy class is forwarded as an RPC call to the remote agent.
+ *
+ * @example
+ * ```typescript
+ * import { Agent } from '@naylence/agent-sdk';
+ *
+ * // Create a proxy to a remote agent
+ * const proxy = Agent.remoteByAddress('fame://calculator');
+ *
+ * // Run a task synchronously
+ * const result = await proxy.runTask({ a: 1, b: 2 });
+ *
+ * // Or start a task and poll for completion
+ * const task = await proxy.startTask({
+ *   id: 'task-1',
+ *   message: { role: 'user', parts: [{ type: 'text', text: 'compute' }] },
+ * });
+ * ```
+ *
+ * @typeParam TAgent - The type of the remote agent for result typing.
+ */
 export class AgentProxy<TAgent extends Agent = Agent> extends Agent {
+  /** @internal */
   private readonly targetAddress: FameAddress | null;
+  /** @internal */
   private readonly targetCapabilities: string[] | null;
+  /** @internal */
   private readonly intentNl: string | null;
+  /** @internal */
   private readonly fabric: FameFabric;
 
-  // Index signature to allow arbitrary RPC method calls without type errors
+  /**
+   * Index signature allowing arbitrary RPC method calls.
+   * Methods not defined on AgentProxy are forwarded to the remote agent.
+   */
   [key: string]: any;
 
+  /** @internal */
   constructor(options: AgentProxyCtorOptions) {
     const { address = null, capabilities = null, intentNl = null, fabric } = options;
 
@@ -143,10 +209,12 @@ export class AgentProxy<TAgent extends Agent = Agent> extends Agent {
     this.fabric = fabric;
   }
 
+  /** Returns null as proxies do not have a local name. */
   get name(): string | null {
     return null;
   }
 
+  /** Returns the proxy's targeting specification. */
   get spec(): Record<string, unknown> {
     const spec: Record<string, unknown> = {
       address: this.targetAddress ? this.targetAddress.toString() : null,
@@ -163,18 +231,25 @@ export class AgentProxy<TAgent extends Agent = Agent> extends Agent {
     return spec;
   }
 
+  /**
+   * The target agent's address, if specified.
+   * @deprecated Use {@link AgentProxy.address} instead.
+   */
   get addressRef(): FameAddress | null {
     return this.targetAddress;
   }
 
+  /** The target agent's address, if specified. */
   get address(): FameAddress | null {
     return this.targetAddress;
   }
 
+  /** The required capabilities for discovery, if specified. */
   get capabilities(): string[] | undefined {
     return this.targetCapabilities ?? undefined;
   }
 
+  /** The fabric this proxy uses for communication. */
   get proxyFabric(): FameFabric {
     return this.fabric;
   }
@@ -188,6 +263,24 @@ export class AgentProxy<TAgent extends Agent = Agent> extends Agent {
     throw new Error('Proxy authentication is not supported');
   }
 
+  /**
+   * Executes a task on the remote agent and waits for completion.
+   *
+   * Starts the task, subscribes to updates, and returns when the task reaches
+   * a terminal state (completed, failed, or canceled).
+   *
+   * @param payload - The task payload to send.
+   * @param id - Optional task identifier. Generated if not provided.
+   * @returns The task result extracted from the final status message.
+   * @throws Error if the task fails.
+   *
+   * @example
+   * ```typescript
+   * const proxy = Agent.remoteByAddress('fame://echo');
+   * const result = await proxy.runTask('hello');
+   * console.log(result); // 'hello'
+   * ```
+   */
   async runTask(
     payload: RunTaskPayload = null,
     id: string | null = null
@@ -253,6 +346,16 @@ export class AgentProxy<TAgent extends Agent = Agent> extends Agent {
     throw new Error(`Don't know how to extract payload from part: ${first.type}`);
   }
 
+  /**
+   * Initiates a task on the remote agent.
+   *
+   * Returns immediately with the initial task status. Use
+   * {@link AgentProxy.subscribeToTaskUpdates} or polling with
+   * {@link AgentProxy.getTaskStatus} to track progress.
+   *
+   * @param params - Task parameters or convenience options.
+   * @returns The created task with initial status.
+   */
   async startTask(params: TaskSendParams): Promise<Task>;
   async startTask(options: {
     id: string;
@@ -303,18 +406,40 @@ export class AgentProxy<TAgent extends Agent = Agent> extends Agent {
     return TaskSchema.parse(result);
   }
 
+  /**
+   * Retrieves the current status of a task.
+   *
+   * @param params - Query parameters including the task ID.
+   * @returns The task with current status.
+   */
   async getTaskStatus(params: TaskQueryParams): Promise<Task> {
     const payload = TaskQueryParamsSchema.parse(params);
     const result = await this._invokeTarget('tasks/get', payload);
     return TaskSchema.parse(result);
   }
 
+  /**
+   * Requests cancellation of a running task.
+   *
+   * @param params - Parameters including the task ID.
+   * @returns The task with updated status.
+   */
   async cancelTask(params: TaskIdParams): Promise<Task> {
     const payload = TaskIdParamsSchema.parse(params);
     const result = await this._invokeTarget('tasks/cancel', payload);
     return TaskSchema.parse(result);
   }
 
+  /**
+   * Subscribes to real-time updates for a task.
+   *
+   * Returns an async iterable that yields status and artifact events
+   * until the task reaches a terminal state or the stream is closed.
+   *
+   * @param params - Task parameters.
+   * @param options - Optional timeout and item limit settings.
+   * @returns Async iterable of task events.
+   */
   subscribeToTaskUpdates(
     params: TaskSendParams,
     options: StreamOptions = {}
@@ -336,11 +461,22 @@ export class AgentProxy<TAgent extends Agent = Agent> extends Agent {
     );
   }
 
+  /**
+   * Cancels a task subscription.
+   *
+   * @param params - Parameters including the task ID.
+   */
   async unsubscribeTask(params: TaskIdParams): Promise<unknown> {
     const payload = TaskIdParamsSchema.parse(params);
     return await this._invokeTarget('tasks/sendUnsubscribe', payload);
   }
 
+  /**
+   * Registers a push notification endpoint for task updates.
+   *
+   * @param config - Push notification configuration.
+   * @returns The registered configuration.
+   */
   async registerPushEndpoint(
     config: TaskPushNotificationConfig
   ): Promise<TaskPushNotificationConfig> {
@@ -349,12 +485,19 @@ export class AgentProxy<TAgent extends Agent = Agent> extends Agent {
     return TaskPushNotificationConfigSchema.parse(result ?? payload);
   }
 
+  /**
+   * Retrieves the push notification config for a task.
+   *
+   * @param params - Parameters including the task ID.
+   * @returns The push notification configuration.
+   */
   async getPushNotificationConfig(params: TaskIdParams): Promise<TaskPushNotificationConfig> {
     const payload = TaskIdParamsSchema.parse(params);
     const result = await this._invokeTarget('tasks/pushNotification/get', payload);
     return TaskPushNotificationConfigSchema.parse(result ?? payload);
   }
 
+  /** @internal */
   private _streamRpc<R>(
     method: string,
     params: TaskSendParams,
@@ -440,6 +583,7 @@ export class AgentProxy<TAgent extends Agent = Agent> extends Agent {
     };
   }
 
+  /** @internal */
   private async _invokeTarget(
     method: string,
     params: Record<string, unknown> | TaskSendParams,
@@ -468,6 +612,10 @@ export class AgentProxy<TAgent extends Agent = Agent> extends Agent {
     throw new Error('Proxy has no routing target');
   }
 
+  /**
+   * Creates a proxy for a remote agent by address.
+   * @internal Use {@link Agent.remoteByAddress} instead.
+   */
   static remoteByAddress<TAgent extends Agent>(
     address: FameAddress,
     options: { fabric: FameFabric }
@@ -476,6 +624,10 @@ export class AgentProxy<TAgent extends Agent = Agent> extends Agent {
     return wrapAgentProxy(proxy);
   }
 
+  /**
+   * Creates a proxy for a remote agent by capabilities.
+   * @internal Use {@link Agent.remoteByCapabilities} instead.
+   */
   static remoteByCapabilities<TAgent extends Agent>(
     capabilities: string[],
     options: { fabric: FameFabric }

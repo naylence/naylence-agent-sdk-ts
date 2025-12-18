@@ -1,6 +1,6 @@
 {
   "name": "@naylence/agent-sdk",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "type": "module",
   "description": "Naylence Agent SDK for TypeScript",
   "author": "Naylence Dev <naylencedev@gmail.com>",
@@ -71,13 +71,16 @@
     "lint:fix": "eslint src/**/*.ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "dev": "tsc --watch --outDir dist/esm",
+    "docs:clean": "rimraf docs/reference/ts/_generated",
+    "docs:gen": "typedoc",
+    "docs": "npm run docs:clean && npm run docs:gen",
     "inject-version": "node ./scripts/inject-version.js",
     "prebuild": "npm run inject-version",
     "predev": "npm run inject-version",
     "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
-    "@naylence/runtime": "^0.3.15",
+    "@naylence/runtime": "^0.3.16",
     "zod": "^4.1.11"
   },
   "peerDependencies": {
@@ -107,6 +110,8 @@
     "ts-jest": "^29.4.4",
     "tslib": "^2.6.2",
     "tsx": "^4.20.6",
+    "typedoc": "^0.28.15",
+    "typedoc-plugin-markdown": "^4.9.0",
     "typescript": "^5.3.2"
   },
   "engines": {

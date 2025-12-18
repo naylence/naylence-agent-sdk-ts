@@ -41,6 +41,10 @@ coverage/*
 coverage-base-async/*
 dist/*
 
+# Generated API documentation (TypeDoc output)
+# Remove this line if you want to commit generated docs for static hosting
+docs/reference/ts/_generated/
+
 AGENTS.md
 **/Dockerfile.local
 build_docker.sh
