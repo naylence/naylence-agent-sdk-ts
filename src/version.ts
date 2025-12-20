@@ -1,8 +1,8 @@
 // This file is auto-generated during build - do not edit manually
-// Generated from package.json version: 0.3.13
+// Generated from package.json version: 0.3.14
 
 /**
  * The package version, injected at build time.
  * @internal
  */
-export const VERSION = '0.3.13';
+export const VERSION = '0.3.14';
