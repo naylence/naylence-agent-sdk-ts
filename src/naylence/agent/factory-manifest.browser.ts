@@ -5,18 +5,16 @@
  * Provides the list of agent-sdk factory modules for registration.
  */
 
-export const MODULES = [
-  "./gateway/agent-http-gateway-listener-factory.js"
-] as const;
+export const MODULES = [] as const;
 
 export type FactoryModuleSpec = (typeof MODULES)[number];
 export type FactoryModuleLoader = () => Promise<Record<string, unknown>>;
 
 export const MODULE_LOADERS: Record<FactoryModuleSpec, FactoryModuleLoader> = {
-  "./gateway/agent-http-gateway-listener-factory.js": () => import(/* webpackIgnore: true */ /* @vite-ignore */ "./gateway/agent-http-gateway-listener-factory.js"),
+
 };
 
 // Node-only factory modules - skipped at runtime in browser environments
 export const NODE_ONLY_FACTORY_MODULES = new Set<FactoryModuleSpec>([
-  "./gateway/agent-http-gateway-listener-factory.js",
+
 ]);

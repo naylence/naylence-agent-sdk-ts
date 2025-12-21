@@ -1,6 +1,6 @@
 {
   "name": "@naylence/agent-sdk",
-  "version": "0.3.14",
+  "version": "0.3.15",
   "type": "module",
   "description": "Naylence Agent SDK for TypeScript",
   "author": "Naylence Dev <naylencedev@gmail.com>",
@@ -22,25 +22,34 @@
     "url": "https://github.com/naylence/naylence-agent-sdk-ts/issues"
   },
   "homepage": "https://github.com/naylence/naylence-agent-sdk-ts#readme",
-  "main": "dist/cjs/index.js",
-  "module": "dist/esm/index.js",
+  "main": "dist/cjs/node.js",
+  "module": "dist/esm/node.js",
   "types": "dist/types/index.d.ts",
+  "browser": {
+    "./dist/esm/naylence/agent/factory-manifest.js": "./dist/esm/naylence/agent/factory-manifest.browser.js",
+    "./dist/cjs/naylence/agent/factory-manifest.js": "./dist/cjs/naylence/agent/factory-manifest.browser.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
-      "import": {
-        "browser": "./dist/esm/browser.js",
-        "default": "./dist/esm/index.js"
+      "browser": {
+        "import": "./dist/esm/browser.js",
+        "require": "./dist/cjs/browser.js",
+        "default": "./dist/esm/browser.js"
       },
-      "require": {
-        "browser": "./dist/esm/browser.js",
-        "default": "./dist/cjs/index.js"
-      }
+      "import": "./dist/esm/node.js",
+      "require": "./dist/cjs/node.js",
+      "default": "./dist/esm/node.js"
+    },
+    "./node": {
+      "types": "./dist/types/node.d.ts",
+      "import": "./dist/esm/node.js",
+      "require": "./dist/cjs/node.js"
     },
     "./browser": {
       "types": "./dist/types/browser.d.ts",
       "import": "./dist/esm/browser.js",
-      "require": "./dist/esm/browser.js"
+      "require": "./dist/cjs/browser.js"
     },
     "./plugin": {
       "import": "./dist/esm/plugin.js",
@@ -75,13 +84,14 @@
     "docs:gen": "typedoc",
     "docs": "npm run docs:clean && npm run docs:gen",
     "inject-version": "node ./scripts/inject-version.js",
-    "prebuild": "npm run inject-version",
-    "predev": "npm run inject-version",
+    "generate-factory-manifest": "node ./scripts/generate-factory-manifest.mjs",
+    "prebuild": "npm run inject-version && npm run generate-factory-manifest",
+    "predev": "npm run inject-version && npm run generate-factory-manifest",
     "prepublishOnly": "npm run build && npm test",
     "build:examples": "tsc -p tsconfig.examples.json"
   },
   "dependencies": {
-    "@naylence/runtime": "^0.3.6-test.101",
+    "@naylence/runtime": "^0.3.20",
     "zod": "^4.1.11"
   },
   "peerDependencies": {

@@ -14,6 +14,33 @@ const DEFAULT_BASE_PATH = '/fame/v1/gateway';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_TIMEOUT_MS = 120_000;
 
+// Structural limits for routing/envelope fields (not payload content)
+const DEFAULT_MAX_METHOD_LENGTH = 256;
+const DEFAULT_MAX_TARGET_ADDR_LENGTH = 512;
+const DEFAULT_MAX_TYPE_LENGTH = 256;
+const DEFAULT_MAX_CAPABILITIES = 16;
+const DEFAULT_MAX_CAPABILITY_LENGTH = 256;
+const DEFAULT_BODY_LIMIT_BYTES = 1_048_576; // 1MB
+
+/**
+ * Structural limits for gateway request fields.
+ * These protect against abuse in routing/envelope fields, not payload content.
+ */
+export interface GatewayLimits {
+  /** Maximum length of the `method` field (default: 256) */
+  maxMethodLength?: number;
+  /** Maximum length of the `targetAddr` field (default: 512) */
+  maxTargetAddrLength?: number;
+  /** Maximum length of the `type` field for messages (default: 256) */
+  maxTypeLength?: number;
+  /** Maximum number of capabilities in the array (default: 16) */
+  maxCapabilities?: number;
+  /** Maximum length of each capability string (default: 256) */
+  maxCapabilityLength?: number;
+  /** Maximum request body size in bytes (default: 1MB). Applied per-route. */
+  bodyLimitBytes?: number;
+}
+
 const logger = getLogger('naylence.agent.gateway.http_listener');
 
 type RpcRequest =
@@ -34,18 +61,27 @@ type MessageRequest =
   | { targetAddr: string; type?: string; payload?: any }
   | { capabilities: string[]; type?: string; payload?: any };
 
+export interface AgentHttpGatewayListenerParams {
+  httpServer: HttpServer;
+  basePath?: string;
+  authorizer?: Authorizer | null;
+  limits?: GatewayLimits;
+}
+
 export class AgentHttpGatewayListener extends TransportListener {
   private readonly _httpServer: HttpServer;
   private readonly _authorizer: Authorizer | null;
   private readonly _basePath: string;
+  private readonly _limits: Required<GatewayLimits>;
   private _node: NodeLike | null = null;
   private _routerRegistered = false;
 
-  constructor(params: { httpServer: HttpServer; basePath?: string; authorizer?: Authorizer | null }) {
+  constructor(params: AgentHttpGatewayListenerParams) {
     super();
     this._httpServer = params.httpServer;
     this._authorizer = params.authorizer ?? null;
     this._basePath = sanitizeBasePath(params.basePath);
+    this._limits = normalizeLimits(params.limits);
   }
 
   get httpServer(): HttpServer {
@@ -87,11 +123,12 @@ export class AgentHttpGatewayListener extends TransportListener {
   }
 
   async createRouter(): Promise<HttpRouter> {
+    const bodyLimit = this._limits.bodyLimitBytes;
     const plugin: HttpRouter = async (instance: any) => {
-      instance.post('/rpc', async (request: any, reply: any) =>
+      instance.post('/rpc', { bodyLimit }, async (request: any, reply: any) =>
         this._handleRpc(request.body, request.headers['authorization'], reply)
       );
-      instance.post('/messages', async (request: any, reply: any) =>
+      instance.post('/messages', { bodyLimit }, async (request: any, reply: any) =>
         this._handleMessage(request.body, request.headers['authorization'], reply)
       );
       instance.get('/health', async () => ({
@@ -175,6 +212,11 @@ export class AgentHttpGatewayListener extends TransportListener {
       return null;
     }
 
+    // Validate structural limits
+    if (method.length > this._limits.maxMethodLength) {
+      return null;
+    }
+
     const timeoutMs = this._parseTimeoutValue(record.timeoutMs);
     const params =
       record.params && typeof record.params === 'object' && !Array.isArray(record.params)
@@ -182,9 +224,23 @@ export class AgentHttpGatewayListener extends TransportListener {
         : undefined;
 
     const targetAddr = typeof record.targetAddr === 'string' ? record.targetAddr.trim() : '';
+    if (targetAddr.length > this._limits.maxTargetAddrLength) {
+      return null;
+    }
+
     const capsRaw = Array.isArray(record.capabilities)
       ? (record.capabilities as unknown[]).map((value) => (typeof value === 'string' ? value.trim() : '')).filter(Boolean)
       : [];
+
+    // Validate capabilities limits
+    if (capsRaw.length > this._limits.maxCapabilities) {
+      return null;
+    }
+    for (const cap of capsRaw) {
+      if (cap.length > this._limits.maxCapabilityLength) {
+        return null;
+      }
+    }
 
     if (targetAddr) {
       return {
@@ -214,11 +270,33 @@ export class AgentHttpGatewayListener extends TransportListener {
 
     const record = body as Record<string, unknown>;
     const targetAddr = typeof record.targetAddr === 'string' ? record.targetAddr.trim() : '';
+
+    // Validate targetAddr limit
+    if (targetAddr.length > this._limits.maxTargetAddrLength) {
+      return null;
+    }
+
     const capsRaw = Array.isArray(record.capabilities)
       ? (record.capabilities as unknown[]).map((value) => (typeof value === 'string' ? value.trim() : '')).filter(Boolean)
       : [];
 
+    // Validate capabilities limits
+    if (capsRaw.length > this._limits.maxCapabilities) {
+      return null;
+    }
+    for (const cap of capsRaw) {
+      if (cap.length > this._limits.maxCapabilityLength) {
+        return null;
+      }
+    }
+
     const type = typeof record.type === 'string' ? record.type.trim() : '';
+
+    // Validate type limit
+    if (type.length > this._limits.maxTypeLength) {
+      return null;
+    }
+
     const payload = 'payload' in record ? (record as { payload: any }).payload : undefined;
 
     if (!type && payload === undefined) {
@@ -370,4 +448,22 @@ function sanitizeBasePath(basePath?: string): string {
     return `/${trimmed}`;
   }
   return trimmed || DEFAULT_BASE_PATH;
+}
+
+function normalizeLimits(limits?: GatewayLimits): Required<GatewayLimits> {
+  return {
+    maxMethodLength: positiveIntOrDefault(limits?.maxMethodLength, DEFAULT_MAX_METHOD_LENGTH),
+    maxTargetAddrLength: positiveIntOrDefault(limits?.maxTargetAddrLength, DEFAULT_MAX_TARGET_ADDR_LENGTH),
+    maxTypeLength: positiveIntOrDefault(limits?.maxTypeLength, DEFAULT_MAX_TYPE_LENGTH),
+    maxCapabilities: positiveIntOrDefault(limits?.maxCapabilities, DEFAULT_MAX_CAPABILITIES),
+    maxCapabilityLength: positiveIntOrDefault(limits?.maxCapabilityLength, DEFAULT_MAX_CAPABILITY_LENGTH),
+    bodyLimitBytes: positiveIntOrDefault(limits?.bodyLimitBytes, DEFAULT_BODY_LIMIT_BYTES),
+  };
+}
+
+function positiveIntOrDefault(value: number | undefined, defaultValue: number): number {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return Math.floor(value);
+  }
+  return defaultValue;
 }

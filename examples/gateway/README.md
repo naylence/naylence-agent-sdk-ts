@@ -10,7 +10,7 @@ This example runs a single Sentinel node with the Agent HTTP Gateway listener pl
 From the repo root:
 
 ```bash
-npx tsx ./examples/gateway/main.ts
+npx tsx --tsconfig tsconfig.examples.json ./examples/gateway/main.ts
 ```
 
 If you `cd examples/gateway` first, run `npx tsx ./main.ts` instead.

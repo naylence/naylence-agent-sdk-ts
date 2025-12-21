@@ -1,3 +1,7 @@
+/**
+ * Isomorphic agent module exports.
+ * Does NOT include Node.js-only components (gateway listeners).
+ */
 export * from './a2a-types.js';
 export * from './agent.js';
 export * from './base-agent.js';
@@ -7,8 +11,6 @@ export * from './errors.js';
 export * from './rpc-adapter.js';
 export * from './util.js';
 export * from './configs.js';
-export * from './gateway/agent-http-gateway-listener.js';
-export * from './gateway/agent-http-gateway-listener-factory.js';
 export * from './util/register-agent-factories.js';
 
 // Register default agent proxy factory

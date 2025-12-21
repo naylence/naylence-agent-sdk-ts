@@ -1,8 +1,13 @@
 import { Registry as DefaultRegistry } from '@naylence/factory';
-import { MODULE_LOADERS, MODULES } from '../factory-manifest.js';
+import {
+  MODULE_LOADERS,
+  MODULES,
+  NODE_ONLY_FACTORY_MODULES,
+  type FactoryModuleLoader,
+  type FactoryModuleSpec,
+} from '../factory-manifest.js';
 
 const FACTORY_MODULE_PREFIX = '@naylence/agent-sdk/naylence/agent/';
-const NODE_ONLY_FACTORY_MODULES = new Set(['./gateway/agent-http-gateway-listener-factory.js']);
 const isNodeEnvironment = typeof process !== 'undefined' && Boolean((process as any)?.versions?.node);
 
 let registered = false;
@@ -11,40 +16,49 @@ function resolveCandidates(spec: string): string[] {
   const candidates: string[] = [];
   const trimmed = spec.startsWith('./') ? spec.slice(2) : spec;
 
+  // Try relative path first (for development/tsx)
   if (spec.startsWith('./')) {
-    candidates.push(spec);
+    const relative = `../${spec.slice(2)}`;
+    candidates.push(relative);
+    if (relative.endsWith('.js')) {
+      candidates.push(relative.replace(/\.js$/u, '.ts'));
+    }
   }
 
-  candidates.push(trimmed);
+  // Then try package path
   candidates.push(`${FACTORY_MODULE_PREFIX}${trimmed}`);
-
   if (trimmed.endsWith('.js')) {
-    candidates.push(trimmed.replace(/\.js$/u, '.ts'));
+    candidates.push(`${FACTORY_MODULE_PREFIX}${trimmed.replace(/\.js$/u, '.ts')}`);
   }
 
   return candidates;
 }
 
-async function importFactoryModule(spec: string): Promise<Record<string, any>> {
+async function importFactoryModule(spec: FactoryModuleSpec): Promise<Record<string, unknown>> {
   let lastError: unknown;
-  const staticLoader = MODULE_LOADERS?.[spec];
+
+  // Try static loader first (from factory-manifest)
+  const staticLoader: FactoryModuleLoader | undefined = MODULE_LOADERS?.[spec];
   if (staticLoader) {
     try {
       const loaded = await staticLoader();
       if (loaded && typeof loaded === 'object') {
-        return loaded as Record<string, any>;
+        return loaded as Record<string, unknown>;
       }
     } catch (error) {
       lastError = error;
     }
+  } else {
+    // console.log(`[DEBUG] No static loader for ${spec}`);
   }
 
+  // Fallback to dynamic import with candidate resolution
   const candidates = resolveCandidates(spec);
   for (const [index, candidate] of candidates.entries()) {
     try {
       const loaded = await import(/* @vite-ignore */ candidate);
       if (loaded && typeof loaded === 'object') {
-        return loaded as Record<string, any>;
+        return loaded as Record<string, unknown>;
       }
       lastError = new Error(`Factory module ${candidate} did not export an object`);
     } catch (error) {
@@ -54,6 +68,7 @@ async function importFactoryModule(spec: string): Promise<Record<string, any>> {
         message.includes('Cannot find module') ||
         message.includes('ERR_MODULE_NOT_FOUND') ||
         message.includes('Unknown file extension') ||
+        message.includes('Failed to fetch dynamically imported module') ||
         message.includes('Importing a module script failed');
       const isLast = index === candidates.length - 1;
       if (!moduleNotFound || isLast) {
@@ -67,19 +82,31 @@ async function importFactoryModule(spec: string): Promise<Record<string, any>> {
 
 async function performRegistration(registry = DefaultRegistry): Promise<void> {
   await Promise.all(
-    MODULES.map(async (spec) => {
+    MODULES.map(async (spec: FactoryModuleSpec) => {
+      // Skip node-only modules in browser environment
       if (!isNodeEnvironment && NODE_ONLY_FACTORY_MODULES.has(spec)) {
         return;
       }
 
-      const mod = await importFactoryModule(spec);
-      const meta = mod.FACTORY_META;
-      const factoryCtor = mod.default ?? mod?.[meta?.key] ?? null;
-      if (!meta || !factoryCtor) {
-        return;
-      }
+      try {
+        const mod = await importFactoryModule(spec);
 
-      registry.registerFactory(meta.base, meta.key, factoryCtor, meta);
+        const meta = mod.FACTORY_META as { base?: string; key?: string } | undefined;
+        const factoryCtor = mod.default ?? (meta?.key ? mod[meta.key] : null);
+
+        if (!meta?.base || !meta?.key || typeof factoryCtor !== 'function') {
+          return;
+        }
+
+        registry.registerFactory(meta.base, meta.key, factoryCtor as any, meta);
+      } catch (error) {
+        // In browser, node-only module failures are expected - silently skip
+        if (!isNodeEnvironment && NODE_ONLY_FACTORY_MODULES.has(spec)) {
+          return;
+        }
+        // Re-throw unexpected errors
+        throw error;
+      }
     })
   );
 }

@@ -19,6 +19,9 @@ export const GATEWAY_CONFIG = {
       {
         type: 'AgentHttpGatewayListener' as const,
         port: SENTINEL_PORT,
+        limits: {
+          bodyLimitBytes: 128
+        }
       },
     ],
     requested_logicals: ['fame.fabric'],
