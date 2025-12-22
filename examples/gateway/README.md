@@ -17,7 +17,7 @@ If you `cd examples/gateway` first, run `npx tsx ./main.ts` instead.
 
 Environment knobs (optional):
 - `FAME_NODE_ID` – node id.
-- `FAME_PUBLIC_URL` – public URL used in logs; defaults to `http://localhost:8080`.
+- `FAME_PUBLIC_URL` – public URL used in logs; defaults to `http://localhost:8000`.
 - `FAME_SECURITY_PROFILE` – e.g. `open` (default).
 
 The gateway exposes:

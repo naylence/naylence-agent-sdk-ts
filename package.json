@@ -1,6 +1,6 @@
 {
   "name": "@naylence/agent-sdk",
-  "version": "0.3.15",
+  "version": "0.3.16",
   "type": "module",
   "description": "Naylence Agent SDK for TypeScript",
   "author": "Naylence Dev <naylencedev@gmail.com>",
@@ -91,7 +91,7 @@
     "build:examples": "tsc -p tsconfig.examples.json"
   },
   "dependencies": {
-    "@naylence/runtime": "^0.3.20",
+    "@naylence/runtime": "^0.3.21",
     "zod": "^4.1.11"
   },
   "peerDependencies": {

@@ -117,10 +117,17 @@ export const SENTINEL_CONFIG = {
       {
         type: 'HttpListener' as const,
         port: SENTINEL_PORT,
+        enabled: '${env:FAME_LISTENER_HTTP_ENABLED:true}',
       },
       {
         type: 'WebSocketListener' as const,
         port: SENTINEL_PORT,
+        enabled: '${env:FAME_LISTENER_WEBSOCKET_ENABLED:true}',
+      },
+      {
+        type: 'AgentHttpGatewayListener' as const,
+        port: SENTINEL_PORT,
+        enabled: '${env:FAME_LISTENER_AGENT_HTTP_GATEWAY_ENABLED:false}',
       },
     ],
     requested_logicals: ['fame.fabric'],

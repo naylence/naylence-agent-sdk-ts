@@ -1,11 +1,11 @@
 import { withFabric } from '@naylence/core';
-import { GATEWAY_CONFIG } from './config.js';
 import { AGENT_ADDR } from './common.js';
 import { MathAgent } from './math-agent.js';
+import { SENTINEL_CONFIG } from '@naylence/agent-sdk';
 
 
 async function main(): Promise<void> {
-  await withFabric({ rootConfig: GATEWAY_CONFIG }, async () => {
+  await withFabric({ rootConfig: SENTINEL_CONFIG }, async () => {
     const agent = new MathAgent();
     await agent.aserve(AGENT_ADDR);
 
