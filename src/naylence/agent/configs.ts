@@ -1,3 +1,5 @@
+import { Expressions } from '@naylence/factory';
+
 export const SENTINEL_PORT = 8000;
 
 const ENV_PLUGIN_KEY = 'FAME_PLUGINS';
@@ -116,17 +118,20 @@ export const SENTINEL_CONFIG = {
     listeners: [
       {
         type: 'HttpListener' as const,
-        port: SENTINEL_PORT,
+        port: Expressions.env('FAME_LISTENER_HTTP_PORT', 
+          Expressions.env('FAME_LISTENER_PORT', SENTINEL_PORT)),
         enabled: '${env:FAME_LISTENER_HTTP_ENABLED:true}',
       },
       {
         type: 'WebSocketListener' as const,
-        port: SENTINEL_PORT,
+        port: Expressions.env('FAME_LISTENER_WEBSOCKET_PORT', 
+          Expressions.env('FAME_LISTENER_PORT', SENTINEL_PORT)),
         enabled: '${env:FAME_LISTENER_WEBSOCKET_ENABLED:true}',
       },
       {
         type: 'AgentHttpGatewayListener' as const,
-        port: SENTINEL_PORT,
+        port: Expressions.env('FAME_LISTENER_AGENT_HTTP_GATEWAY_PORT', 
+          Expressions.env('FAME_LISTENER_PORT', SENTINEL_PORT)),
         enabled: '${env:FAME_LISTENER_AGENT_HTTP_GATEWAY_ENABLED:false}',
       },
     ],
