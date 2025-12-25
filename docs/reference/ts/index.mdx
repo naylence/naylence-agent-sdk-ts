@@ -1,0 +1,53 @@
+---
+title: TypeScript API Reference
+description: API documentation for @naylence/agent-sdk
+---
+
+# TypeScript API Reference
+
+This section contains the auto-generated API documentation for the **@naylence/agent-sdk** package.
+
+## Public API Surface
+
+Only the curated public exports are documented here. Internal modules, utilities, and implementation details are intentionally excluded to keep the documentation focused and stable.
+
+### Documentation Structure
+
+The generated documentation is organized by symbol type:
+
+- **[Classes](./_generated/classes/)** — Agent base classes (`Agent`, `BaseAgent`, `BackgroundTaskAgent`), proxy classes, and error types.
+- **[Interfaces](./_generated/interfaces/)** — Configuration options and type definitions.
+- **[Enumerations](./_generated/enumerations/)** — Enum types like `TaskState`.
+- **[Type Aliases](./_generated/type-aliases/)** — Zod schemas and utility types.
+- **[Functions](./_generated/functions/)** — Exported utility functions.
+
+### Key Classes
+
+| Class | Description |
+|-------|-------------|
+| [Agent](./_generated/classes/Agent.md) | Static helpers for remote proxies, broadcasting, and task execution. |
+| [BaseAgent](./_generated/classes/BaseAgent.md) | Base class for implementing one-shot agents. |
+| [BackgroundTaskAgent](./_generated/classes/BackgroundTaskAgent.md) | Base class for long-running/streaming tasks. |
+| [AgentProxy](./_generated/classes/AgentProxy.md) | Interface for remote agent communication. |
+
+### Quick Links
+
+- **[Full API Index](./_generated/index.md)** — Complete list of all exported symbols.
+
+## Regenerating Documentation
+
+The API documentation is auto-generated from TypeScript source using [TypeDoc](https://typedoc.org/) with the [typedoc-plugin-markdown](https://github.com/tgreyuk/typedoc-plugin-markdown) plugin.
+
+To regenerate the documentation locally:
+
+```bash
+npm run docs
+```
+
+This will:
+1. Clean the `docs/reference/ts/_generated` directory
+2. Run TypeDoc to generate fresh Markdown files from `src/public-api.ts`
+
+## Note on Generated Files
+
+The `_generated/` directory contains auto-generated Markdown files. These files are excluded from version control by default (see `.gitignore`). If you need to commit the generated docs for static hosting, remove the corresponding line from `.gitignore`.
