@@ -1,8 +1,6 @@
 name: Build and Push Advanced Security Docker Image
 
 on:
-  push:
-    tags: [ 'v*' ]
   release:
     types: [published]
   workflow_dispatch:
@@ -15,7 +13,6 @@ on:
     workflows: ["Publish to npm"]
     types:
       - completed
-    branches: [ main ]
 
 env:
   DOCKERHUB_REGISTRY: docker.io
